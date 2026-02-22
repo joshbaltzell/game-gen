@@ -1,21 +1,16 @@
-export interface GeneratedAssets {
-  heroIdle: string;
-  heroRun: string;
-  villain: string;
-  enemyA: string;
-  enemyB: string;
-  collectible: string;
-  backgrounds: string[];
-  platformTiles: string[];
-}
+// Flat map of Phaser texture key → base64 image string
+// Keys match what Phaser expects: "hero-idle", "enemy-a", "bg-level-0", etc.
+export type GeneratedAssets = Record<string, string>;
 
-export interface AssetGenerationProgress {
-  story: "pending" | "loading" | "complete" | "error";
-  heroSprite: "pending" | "loading" | "complete" | "error";
-  enemySprites: "pending" | "loading" | "complete" | "error";
-  backgrounds: "pending" | "loading" | "complete" | "error";
-  tileset: "pending" | "loading" | "complete" | "error";
-  processing: "pending" | "loading" | "complete" | "error";
+export type StepStatus = "pending" | "loading" | "complete" | "error";
+
+export interface AssetGenerationStep {
+  key: string;
+  label: string;
+  icon: string;
+  phaserKey: string;
+  status: StepStatus;
+  preview?: string; // base64 for thumbnail
 }
 
 export type PipelineStatus = "idle" | "generating" | "ready" | "error";

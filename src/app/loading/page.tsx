@@ -1,18 +1,155 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useGameStore } from "@/stores/gameStore";
-import type { AssetGenerationProgress, PipelineStatus } from "@/types/assets";
+import { getThemeById } from "@/data/themes";
+import {
+  buildHeroIdlePrompt,
+  buildHeroRunPrompt,
+  buildVillainPrompt,
+  buildEnemyPrompt,
+  buildCollectiblePrompt,
+  buildBackgroundPrompt,
+  buildPlatformTilesetPrompt,
+} from "@/lib/imageGenerator";
+import type { StoryData } from "@/types/story";
+import type { PipelineStatus, StepStatus } from "@/types/assets";
+import type { Theme } from "@/types/madlibs";
 
-const STEPS = [
-  { key: "story" as const, label: "Writing your story", icon: "📝" },
-  { key: "heroSprite" as const, label: "Drawing your hero", icon: "🦸" },
-  { key: "enemySprites" as const, label: "Creating enemies", icon: "👾" },
-  { key: "backgrounds" as const, label: "Painting your world", icon: "🎨" },
-  { key: "tileset" as const, label: "Building platforms", icon: "🧱" },
-  { key: "processing" as const, label: "Assembling your game", icon: "⚙️" },
-];
+interface GenerationStep {
+  id: string;
+  label: string;
+  icon: string;
+  phaserKey: string;
+  status: StepStatus;
+  preview: string | null;
+  prompt?: string;
+  size?: string;
+  quality?: string;
+  background?: string;
+}
+
+function buildImageSteps(
+  theme: Theme,
+  story: StoryData,
+  entries: Record<string, string>
+): GenerationStep[] {
+  return [
+    {
+      id: "hero-idle",
+      label: "Drawing your hero",
+      icon: "🦸",
+      phaserKey: "hero-idle",
+      status: "pending",
+      preview: null,
+      prompt: buildHeroIdlePrompt(theme, story, entries),
+      size: "1024x1024",
+      quality: "medium",
+      background: "transparent",
+    },
+    {
+      id: "hero-run",
+      label: "Hero running pose",
+      icon: "🏃",
+      phaserKey: "hero-run",
+      status: "pending",
+      preview: null,
+      prompt: buildHeroRunPrompt(theme, story, entries),
+      size: "1024x1024",
+      quality: "medium",
+      background: "transparent",
+    },
+    {
+      id: "villain",
+      label: "Creating the villain",
+      icon: "😈",
+      phaserKey: "villain",
+      status: "pending",
+      preview: null,
+      prompt: buildVillainPrompt(theme, story, entries),
+      size: "1024x1024",
+      quality: "medium",
+      background: "transparent",
+    },
+    {
+      id: "enemy-a",
+      label: "Spawning enemies",
+      icon: "👾",
+      phaserKey: "enemy-a",
+      status: "pending",
+      preview: null,
+      prompt: buildEnemyPrompt(theme, story.chapters[0]),
+      size: "1024x1024",
+      quality: "medium",
+      background: "transparent",
+    },
+    {
+      id: "enemy-b",
+      label: "More enemies",
+      icon: "👹",
+      phaserKey: "enemy-b",
+      status: "pending",
+      preview: null,
+      prompt: buildEnemyPrompt(theme, story.chapters[1] || story.chapters[0]),
+      size: "1024x1024",
+      quality: "medium",
+      background: "transparent",
+    },
+    {
+      id: "collectible",
+      label: "Crafting collectibles",
+      icon: "✨",
+      phaserKey: "collectible",
+      status: "pending",
+      preview: null,
+      prompt: buildCollectiblePrompt(theme, entries),
+      size: "1024x1024",
+      quality: "low",
+      background: "transparent",
+    },
+    ...story.chapters.map((chapter, i) => ({
+      id: `bg-level-${i}`,
+      label: `Painting world ${i + 1}`,
+      icon: "🎨",
+      phaserKey: `bg-level-${i}`,
+      status: "pending" as StepStatus,
+      preview: null,
+      prompt: buildBackgroundPrompt(theme, chapter),
+      size: "1536x1024",
+      quality: "low",
+      background: "opaque",
+    })),
+    {
+      id: "platform-tile-0",
+      label: "Building platforms",
+      icon: "🧱",
+      phaserKey: "platform-tile-0",
+      status: "pending",
+      preview: null,
+      prompt: buildPlatformTilesetPrompt(theme),
+      size: "1024x1024",
+      quality: "medium",
+      background: "transparent",
+    },
+  ];
+}
+
+async function generateSingleImage(
+  prompt: string,
+  size: string,
+  quality: string,
+  background: string
+): Promise<string> {
+  const res = await fetch("/api/generate-single-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt, size, quality, background }),
+  });
+  if (!res.ok) throw new Error("Image generation failed");
+  const data = await res.json();
+  return data.image;
+}
 
 export default function LoadingPage() {
   const router = useRouter();
@@ -23,15 +160,18 @@ export default function LoadingPage() {
   const setGameStatus = useGameStore((s) => s.setGameStatus);
 
   const [status, setStatus] = useState<PipelineStatus>("idle");
-  const [progress, setProgress] = useState<AssetGenerationProgress>({
-    story: "pending",
-    heroSprite: "pending",
-    enemySprites: "pending",
-    backgrounds: "pending",
-    tileset: "pending",
-    processing: "pending",
-  });
+  const [storyStatus, setStoryStatus] = useState<StepStatus>("pending");
+  const [imageSteps, setImageSteps] = useState<GenerationStep[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  const updateStep = useCallback(
+    (id: string, update: Partial<GenerationStep>) => {
+      setImageSteps((prev) =>
+        prev.map((step) => (step.id === id ? { ...step, ...update } : step))
+      );
+    },
+    []
+  );
 
   useEffect(() => {
     if (!themeId || Object.keys(entries).length === 0) {
@@ -42,10 +182,13 @@ export default function LoadingPage() {
     if (status !== "idle") return;
     setStatus("generating");
 
+    const theme = getThemeById(themeId);
+    if (!theme) return;
+
     (async () => {
       try {
         // Step 1: Generate story
-        setProgress((p) => ({ ...p, story: "loading" }));
+        setStoryStatus("loading");
         const storyRes = await fetch("/api/generate-story", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -53,47 +196,62 @@ export default function LoadingPage() {
         });
 
         if (!storyRes.ok) throw new Error("Story generation failed");
-        const { story } = await storyRes.json();
+        const { story } = (await storyRes.json()) as { story: StoryData };
         setStory(story);
-        setProgress((p) => ({ ...p, story: "complete" }));
+        setStoryStatus("complete");
 
-        // Step 2: Generate images
-        setProgress((p) => ({
-          ...p,
-          heroSprite: "loading",
-          enemySprites: "loading",
-          backgrounds: "loading",
-          tileset: "loading",
-        }));
+        // Step 2: Build image generation steps from story
+        const steps = buildImageSteps(theme, story, entries);
+        setImageSteps(steps);
 
-        const imageRes = await fetch("/api/generate-images", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ themeId, story, entries }),
-        });
+        // Step 3: Generate images progressively in batches of 3
+        const assets: Record<string, string> = {};
 
-        if (!imageRes.ok) throw new Error("Image generation failed");
-        const assets = await imageRes.json();
+        for (let i = 0; i < steps.length; i += 3) {
+          const batch = steps.slice(i, i + 3);
+
+          // Mark batch as loading
+          for (const step of batch) {
+            updateStep(step.id, { status: "loading" });
+          }
+
+          // Generate batch in parallel
+          const results = await Promise.allSettled(
+            batch.map(async (step) => {
+              const base64 = await generateSingleImage(
+                step.prompt!,
+                step.size!,
+                step.quality!,
+                step.background!
+              );
+              return { id: step.id, phaserKey: step.phaserKey, base64 };
+            })
+          );
+
+          // Process results
+          for (const result of results) {
+            if (result.status === "fulfilled") {
+              const { id, phaserKey, base64 } = result.value;
+              assets[phaserKey] = base64;
+              updateStep(id, {
+                status: "complete",
+                preview: base64,
+              });
+            } else {
+              const failedIndex = results.indexOf(result);
+              const failedStep = batch[failedIndex];
+              if (failedStep) {
+                updateStep(failedStep.id, { status: "error" });
+              }
+            }
+          }
+        }
+
+        // Step 4: Store assets and navigate
         setAssets(assets);
-
-        setProgress((p) => ({
-          ...p,
-          heroSprite: "complete",
-          enemySprites: "complete",
-          backgrounds: "complete",
-          tileset: "complete",
-        }));
-
-        // Step 3: Processing
-        setProgress((p) => ({ ...p, processing: "loading" }));
-        // Brief delay to show the step
-        await new Promise((r) => setTimeout(r, 500));
-        setProgress((p) => ({ ...p, processing: "complete" }));
-
         setStatus("ready");
         setGameStatus("cutscene");
 
-        // Navigate to cutscene
         await new Promise((r) => setTimeout(r, 800));
         router.push("/cutscene");
       } catch (err) {
@@ -104,11 +262,11 @@ export default function LoadingPage() {
         setStatus("error");
       }
     })();
-  }, [themeId, entries, status, router, setStory, setAssets, setGameStatus]);
+  }, [themeId, entries, status, router, setStory, setAssets, setGameStatus, updateStep]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--background)]">
-      <div className="max-w-md w-full space-y-8">
+    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--background)] overflow-y-auto">
+      <div className="max-w-lg w-full space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold text-[var(--accent)]">
             Creating Your Game
@@ -118,38 +276,72 @@ export default function LoadingPage() {
           </p>
         </div>
 
+        {/* Story step */}
+        <div
+          className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+            storyStatus === "loading"
+              ? "bg-[var(--surface-light)]"
+              : storyStatus === "complete"
+              ? "bg-[var(--surface)] opacity-70"
+              : "bg-[var(--surface)] opacity-40"
+          }`}
+        >
+          <div className="text-xl w-8 text-center">
+            {storyStatus === "complete"
+              ? "✅"
+              : storyStatus === "loading"
+              ? "⏳"
+              : "📝"}
+          </div>
+          <div className="flex-1 text-sm font-medium">
+            Writing your story
+            {storyStatus === "loading" && (
+              <span className="animate-pulse">...</span>
+            )}
+          </div>
+        </div>
+
+        {/* Image steps with previews */}
         <div className="space-y-3">
-          {STEPS.map((step) => {
-            const stepStatus = progress[step.key];
-            return (
-              <div
-                key={step.key}
-                className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
-                  stepStatus === "loading"
-                    ? "bg-[var(--surface-light)]"
-                    : stepStatus === "complete"
-                    ? "bg-[var(--surface)] opacity-70"
-                    : "bg-[var(--surface)] opacity-40"
-                }`}
-              >
-                <div className="text-xl w-8 text-center">
-                  {stepStatus === "complete"
-                    ? "✅"
-                    : stepStatus === "loading"
-                    ? "⏳"
-                    : stepStatus === "error"
-                    ? "❌"
-                    : step.icon}
-                </div>
-                <div className="flex-1 text-sm font-medium">
-                  {step.label}
-                  {stepStatus === "loading" && (
-                    <span className="animate-pulse">...</span>
-                  )}
-                </div>
+          {imageSteps.map((step) => (
+            <div
+              key={step.id}
+              className={`flex items-center gap-3 p-3 rounded-lg transition-all ${
+                step.status === "loading"
+                  ? "bg-[var(--surface-light)]"
+                  : step.status === "complete"
+                  ? "bg-[var(--surface)]"
+                  : "bg-[var(--surface)] opacity-40"
+              }`}
+            >
+              {/* Preview thumbnail or icon */}
+              <div className="w-12 h-12 flex-shrink-0 rounded overflow-hidden flex items-center justify-center bg-[var(--background)]">
+                {step.preview ? (
+                  <img
+                    src={`data:image/png;base64,${step.preview}`}
+                    alt={step.label}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <span className="text-xl">
+                    {step.status === "complete"
+                      ? "✅"
+                      : step.status === "loading"
+                      ? "⏳"
+                      : step.status === "error"
+                      ? "❌"
+                      : step.icon}
+                  </span>
+                )}
               </div>
-            );
-          })}
+              <div className="flex-1 text-sm font-medium">
+                {step.label}
+                {step.status === "loading" && (
+                  <span className="animate-pulse">...</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
 
         {error && (
@@ -159,14 +351,8 @@ export default function LoadingPage() {
               onClick={() => {
                 setStatus("idle");
                 setError(null);
-                setProgress({
-                  story: "pending",
-                  heroSprite: "pending",
-                  enemySprites: "pending",
-                  backgrounds: "pending",
-                  tileset: "pending",
-                  processing: "pending",
-                });
+                setStoryStatus("pending");
+                setImageSteps([]);
               }}
               className="px-6 py-2 rounded-lg bg-[var(--accent)] text-[var(--background)] font-medium"
             >

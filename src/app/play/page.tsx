@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
+import { useGameStore } from "@/stores/gameStore";
+import { EventBus } from "@/game/EventBus";
 import type { IRefPhaserGame } from "@/components/game/PhaserGame";
 
 const PhaserGame = dynamic(() => import("@/components/game/PhaserGame"), {
@@ -15,11 +17,28 @@ const PhaserGame = dynamic(() => import("@/components/game/PhaserGame"), {
 
 export default function PlayPage() {
   const phaserRef = useRef<IRefPhaserGame | null>(null);
-  const [, setCurrentScene] = useState<Phaser.Scene | null>(null);
+  const [sceneReady, setSceneReady] = useState(false);
+  const assets = useGameStore((s) => s.assets);
+  const assetsSentRef = useRef(false);
 
-  const handleSceneChange = (scene: Phaser.Scene) => {
-    setCurrentScene(scene);
-  };
+  const handleSceneChange = useCallback((scene: Phaser.Scene) => {
+    // PreloadScene is the one that listens for assets
+    if (scene.scene.key === "PreloadScene") {
+      setSceneReady(true);
+    }
+  }, []);
+
+  // When PreloadScene is ready and we have assets, send them over
+  useEffect(() => {
+    if (sceneReady && assets && Object.keys(assets).length > 0 && !assetsSentRef.current) {
+      assetsSentRef.current = true;
+      // Small delay to ensure the EventBus listener in PreloadScene is registered
+      const timer = setTimeout(() => {
+        EventBus.emit("load-generated-assets", assets);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [sceneReady, assets]);
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-[var(--background)]">
