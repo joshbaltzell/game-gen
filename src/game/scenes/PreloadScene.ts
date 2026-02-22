@@ -45,6 +45,14 @@ export class PreloadScene extends Phaser.Scene {
       }
     );
 
+    // Listen for story data from React — store in Phaser registry
+    EventBus.on(
+      "load-story-data",
+      (story: unknown) => {
+        this.registry.set("story", story);
+      }
+    );
+
     // Listen for game start signal from React
     EventBus.on("start-game", () => {
       this.scene.start("GameScene", { levelIndex: 0 });
@@ -136,6 +144,7 @@ export class PreloadScene extends Phaser.Scene {
 
   shutdown(): void {
     EventBus.off("load-generated-assets");
+    EventBus.off("load-story-data");
     EventBus.off("start-game");
   }
 }

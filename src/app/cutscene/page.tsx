@@ -7,9 +7,9 @@ import { useGameStore } from "@/stores/gameStore";
 export default function CutscenePage() {
   const router = useRouter();
   const story = useGameStore((s) => s.story);
+  const assets = useGameStore((s) => s.assets);
   const setGameStatus = useGameStore((s) => s.setGameStatus);
 
-  const [currentChapter, setCurrentChapter] = useState(0);
   const [displayedText, setDisplayedText] = useState("");
   const [isTyping, setIsTyping] = useState(true);
   const [showContinue, setShowContinue] = useState(false);
@@ -21,11 +21,11 @@ export default function CutscenePage() {
     }
   }, [story, router]);
 
-  // Typewriter effect
+  // Typewriter effect for chapter 1 only
   useEffect(() => {
     if (!story) return;
 
-    const chapter = story.chapters[currentChapter];
+    const chapter = story.chapters[0];
     if (!chapter) return;
 
     const fullText = chapter.narrative;
@@ -46,12 +46,15 @@ export default function CutscenePage() {
     }, 30);
 
     return () => clearInterval(interval);
-  }, [story, currentChapter]);
+  }, [story]);
 
   if (!story) return null;
 
-  const chapter = story.chapters[currentChapter];
-  const isLastChapter = currentChapter >= story.chapters.length - 1;
+  const chapter = story.chapters[0];
+
+  // Chapter illustration key
+  const illustrationKey = "chapter-illustration-0";
+  const illustrationBase64 = assets?.[illustrationKey] ?? null;
 
   const handleContinue = () => {
     if (isTyping) {
@@ -62,13 +65,9 @@ export default function CutscenePage() {
       return;
     }
 
-    if (isLastChapter) {
-      // Start the game
-      setGameStatus("playing");
-      router.push("/play");
-    } else {
-      setCurrentChapter((prev) => prev + 1);
-    }
+    // Start the game (chapter 2 and 3 will show in-game via LevelTransitionScene)
+    setGameStatus("playing");
+    router.push("/play");
   };
 
   return (
@@ -78,10 +77,19 @@ export default function CutscenePage() {
     >
       <div className="max-w-lg w-full space-y-6">
         {/* Story title */}
-        {currentChapter === 0 && (
-          <h1 className="text-3xl font-bold text-[var(--accent)] text-center">
-            {story.title}
-          </h1>
+        <h1 className="text-3xl font-bold text-[var(--accent)] text-center">
+          {story.title}
+        </h1>
+
+        {/* Chapter illustration */}
+        {illustrationBase64 && (
+          <div className="rounded-xl overflow-hidden border border-[var(--surface-light)]">
+            <img
+              src={`data:image/png;base64,${illustrationBase64}`}
+              alt={chapter.title}
+              className="w-full h-auto object-cover"
+            />
+          </div>
         )}
 
         {/* Chapter header */}
@@ -119,25 +127,9 @@ export default function CutscenePage() {
         {/* Continue prompt */}
         {showContinue && (
           <p className="text-center text-sm text-[var(--foreground)] opacity-40 animate-pulse">
-            {isLastChapter ? "Tap to start playing!" : "Tap to continue..."}
+            Tap to start playing!
           </p>
         )}
-
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2">
-          {story.chapters.map((_, i) => (
-            <div
-              key={i}
-              className={`w-2 h-2 rounded-full ${
-                i === currentChapter
-                  ? "bg-[var(--accent)]"
-                  : i < currentChapter
-                  ? "bg-[var(--accent)] opacity-40"
-                  : "bg-[var(--surface-light)]"
-              }`}
-            />
-          ))}
-        </div>
       </div>
     </main>
   );

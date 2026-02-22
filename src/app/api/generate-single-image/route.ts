@@ -28,17 +28,43 @@ export async function POST(request: Request) {
     const imageData = response.data?.[0];
     if (!imageData || !imageData.b64_json) {
       return NextResponse.json(
-        { error: "No image data returned" },
+        { error: "No image data returned from OpenAI" },
         { status: 500 }
       );
     }
 
     return NextResponse.json({ image: imageData.b64_json });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Single image generation error:", error);
+
+    // Extract meaningful error details
+    let errorMessage = "Failed to generate image";
+    let statusCode = 500;
+
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+
+    // Handle OpenAI-specific errors
+    if (typeof error === "object" && error !== null) {
+      const apiError = error as { status?: number; message?: string; error?: { message?: string } };
+      if (apiError.status === 429) {
+        errorMessage = "Rate limited — too many requests. Please wait a moment.";
+        statusCode = 429;
+      } else if (apiError.status === 400) {
+        errorMessage = `Bad request: ${apiError.error?.message || apiError.message || "Invalid parameters"}`;
+        statusCode = 400;
+      } else if (apiError.status === 401) {
+        errorMessage = "Authentication failed — check your API key";
+        statusCode = 401;
+      } else if (apiError.error?.message) {
+        errorMessage = apiError.error.message;
+      }
+    }
+
     return NextResponse.json(
-      { error: "Failed to generate image" },
-      { status: 500 }
+      { error: errorMessage },
+      { status: statusCode }
     );
   }
 }

@@ -18,6 +18,12 @@ export interface CollectiblePlacement {
   y: number;
 }
 
+export interface PowerUpPlacement {
+  x: number;
+  y: number;
+  type: "star";
+}
+
 export interface LevelData {
   width: number;
   height: number;
@@ -25,6 +31,7 @@ export interface LevelData {
   platforms: PlatformData[];
   enemies: EnemyPlacement[];
   collectibles: CollectiblePlacement[];
+  powerUps: PowerUpPlacement[];
   playerStart: { x: number; y: number };
   exit: { x: number; y: number };
   backgroundKey: string;

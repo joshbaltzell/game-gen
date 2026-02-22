@@ -29,9 +29,6 @@ export class BootScene extends Phaser.Scene {
       bg.destroy();
       bar.destroy();
     });
-
-    // Load static UI assets here when we have them
-    // For now, create placeholder textures programmatically
   }
 
   create(): void {
@@ -68,9 +65,9 @@ export class BootScene extends Phaser.Scene {
     heroGfx.fillStyle(0x44ff44, 1);
     heroGfx.fillRect(0, 0, 48, 48);
     heroGfx.fillStyle(0x22aa22, 1);
-    heroGfx.fillRect(12, 8, 8, 8); // eyes
+    heroGfx.fillRect(12, 8, 8, 8);
     heroGfx.fillRect(28, 8, 8, 8);
-    heroGfx.fillRect(12, 28, 24, 8); // mouth
+    heroGfx.fillRect(12, 28, 24, 8);
     heroGfx.generateTexture("hero-idle", 48, 48);
     heroGfx.destroy();
 
@@ -112,6 +109,15 @@ export class BootScene extends Phaser.Scene {
     collectGfx.fillCircle(12, 12, 12);
     collectGfx.generateTexture("collectible", 24, 24);
     collectGfx.destroy();
+
+    // Fallback power-up (golden star)
+    const starGfx = this.add.graphics();
+    starGfx.fillStyle(0xffd700, 1);
+    starGfx.fillCircle(16, 16, 16);
+    starGfx.fillStyle(0xffff00, 1);
+    starGfx.fillCircle(16, 16, 10);
+    starGfx.generateTexture("power-up", 32, 32);
+    starGfx.destroy();
 
     // Platform tile
     const platformGfx = this.add.graphics();

@@ -3,6 +3,7 @@ import type {
   PlatformData,
   EnemyPlacement,
   CollectiblePlacement,
+  PowerUpPlacement,
 } from "@/types/game";
 
 // ---------------------------------------------------------------------------
@@ -347,6 +348,7 @@ export class LevelGenerator {
     const platforms: PlatformData[] = [];
     const enemies: EnemyPlacement[] = [];
     const collectibles: CollectiblePlacement[] = [];
+    const powerUps: PowerUpPlacement[] = [];
 
     // Number of middle chunks scales with difficulty
     const chunkCount = 5 + difficulty * 2; // 7, 9, 11
@@ -360,6 +362,9 @@ export class LevelGenerator {
     const pool = CHUNKS.filter((c) => c.minDiff <= difficulty);
     let lastChunkName = "";
 
+    // Track midpoint for power-up placement
+    const midChunk = Math.floor(chunkCount / 2);
+
     for (let i = 0; i < chunkCount; i++) {
       // Pick a chunk, avoiding immediate repeats
       let chunk: ChunkDef;
@@ -371,6 +376,20 @@ export class LevelGenerator {
       lastChunkName = chunk.name;
 
       this.buildChunk(chunk, curX, ts, difficulty, platforms, enemies, collectibles);
+
+      // Place 1 power-up per level at the midpoint chunk, on an elevated spot
+      if (i === midChunk) {
+        // Find the highest platform in this chunk, or use a spot 3 tiles above ground
+        let puY = (this.GROUND_ROW - 3) * ts;
+        if (chunk.platforms.length > 0) {
+          // Find highest platform (largest 'above' value)
+          const highest = chunk.platforms.reduce((max, p) => p[1] > max[1] ? p : max, chunk.platforms[0]);
+          puY = (this.GROUND_ROW - highest[1] - 1) * ts; // 1 tile above the platform
+        }
+        const puX = (curX + Math.floor(chunk.width / 2)) * ts;
+        powerUps.push({ x: puX, y: puY, type: "star" });
+      }
+
       curX += chunk.width;
     }
 
@@ -385,6 +404,7 @@ export class LevelGenerator {
       platforms,
       enemies,
       collectibles,
+      powerUps,
       playerStart: {
         x: 3 * ts,
         y: (this.GROUND_ROW - 1) * ts,

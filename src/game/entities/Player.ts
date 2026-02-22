@@ -4,6 +4,7 @@ import type { TouchControls } from "../systems/TouchControls";
 export class Player {
   public sprite: Phaser.Physics.Arcade.Sprite;
   public isInvulnerable: boolean = false;
+  public isStarPowered: boolean = false;
   private scene: Phaser.Scene;
   private moveSpeed: number = 300;
   private jumpForce: number = -580;
@@ -11,6 +12,9 @@ export class Player {
   private jumpHeld: boolean = false;
   private maxJumpHoldTime: number = 280;
   private jumpHoldTimer: number = 0;
+  private baseSpeed: number = 300;
+  private starTimer?: Phaser.Time.TimerEvent;
+  private starTintTimer?: Phaser.Time.TimerEvent;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -91,8 +95,59 @@ export class Player {
     }
   }
 
+  activateStar(scene: Phaser.Scene): void {
+    this.isStarPowered = true;
+    this.isInvulnerable = true;
+
+    // Speed boost: 1.5x
+    this.moveSpeed = this.baseSpeed * 1.5;
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    body.setMaxVelocityX(this.moveSpeed);
+
+    // Rainbow tint cycling every 100ms
+    const tintColors = [0xff0000, 0xff8800, 0xffff00, 0x00ff00, 0x0088ff, 0x8800ff];
+    let tintIndex = 0;
+
+    this.starTintTimer = scene.time.addEvent({
+      delay: 100,
+      loop: true,
+      callback: () => {
+        this.sprite.setTint(tintColors[tintIndex % tintColors.length]);
+        tintIndex++;
+      },
+    });
+
+    // 8-second duration
+    this.starTimer = scene.time.delayedCall(8000, () => {
+      this.deactivateStar();
+    });
+  }
+
+  deactivateStar(): void {
+    this.isStarPowered = false;
+    this.isInvulnerable = false;
+
+    // Restore speed
+    this.moveSpeed = this.baseSpeed;
+    const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    body.setMaxVelocityX(this.moveSpeed);
+
+    // Stop rainbow tint
+    if (this.starTintTimer) {
+      this.starTintTimer.remove(false);
+      this.starTintTimer = undefined;
+    }
+    if (this.starTimer) {
+      this.starTimer.remove(false);
+      this.starTimer = undefined;
+    }
+
+    this.sprite.clearTint();
+    this.sprite.setAlpha(1);
+  }
+
   takeDamage(): void {
-    if (this.isInvulnerable) return;
+    if (this.isInvulnerable || this.isStarPowered) return;
 
     this.isInvulnerable = true;
     this.sprite.setTint(0xff0000);

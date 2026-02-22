@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { themes, getThemeById } from "@/data/themes";
 import { checkBlockedWords } from "@/data/blockedWords";
 import { useGameStore } from "@/stores/gameStore";
 import type { Theme, ThemeBlank } from "@/types/madlibs";
+
+/** Pick a random suggestion for a blank, falling back to placeholder */
+function randomSuggestion(blank: ThemeBlank): string {
+  const pool = blank.suggestions && blank.suggestions.length > 0
+    ? blank.suggestions
+    : [blank.placeholder];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 export default function CreatePage() {
   const router = useRouter();
@@ -22,11 +30,25 @@ export default function CreatePage() {
     const theme = getThemeById(themeId);
     if (theme) {
       setSelectedTheme(theme);
-      setEntries({});
+      // Auto-fill with random suggestions
+      const randomEntries: Record<string, string> = {};
+      for (const blank of theme.blanks) {
+        randomEntries[blank.id] = randomSuggestion(blank);
+      }
+      setEntries(randomEntries);
       setErrors({});
       setModerationError(null);
     }
   };
+
+  const handleShuffle = useCallback(() => {
+    if (!selectedTheme) return;
+    const randomEntries: Record<string, string> = {};
+    for (const blank of selectedTheme.blanks) {
+      randomEntries[blank.id] = randomSuggestion(blank);
+    }
+    setEntries(randomEntries);
+  }, [selectedTheme]);
 
   const handleInputChange = (id: string, value: string) => {
     setEntries((prev) => ({ ...prev, [id]: value }));
@@ -154,7 +176,7 @@ export default function CreatePage() {
             onClick={() => setSelectedTheme(null)}
             className="text-sm text-[var(--accent)] hover:opacity-80"
           >
-            ← Back
+            &larr; Back
           </button>
           <div className="text-center">
             <h1 className="text-xl font-bold text-[var(--foreground)]">
@@ -164,9 +186,17 @@ export default function CreatePage() {
           <div className="w-12" />
         </div>
 
-        <p className="text-sm text-center opacity-60">
-          Fill in each blank to create your unique adventure!
-        </p>
+        <div className="text-center space-y-2">
+          <p className="text-sm opacity-60">
+            Fill in each blank to create your unique adventure!
+          </p>
+          <button
+            onClick={handleShuffle}
+            className="px-4 py-2 rounded-lg bg-[var(--surface)] border border-[var(--surface-light)] text-sm font-medium hover:bg-[var(--surface-light)] transition-colors active:scale-95 transform"
+          >
+            🎲 Shuffle All
+          </button>
+        </div>
 
         {moderationError && (
           <div className="p-3 rounded-lg bg-red-900/30 border border-red-500/50 text-red-300 text-sm text-center">

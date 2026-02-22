@@ -19,7 +19,9 @@ export default function PlayPage() {
   const phaserRef = useRef<IRefPhaserGame | null>(null);
   const [sceneReady, setSceneReady] = useState(false);
   const assets = useGameStore((s) => s.assets);
+  const story = useGameStore((s) => s.story);
   const assetsSentRef = useRef(false);
+  const storySentRef = useRef(false);
 
   const handleSceneChange = useCallback((scene: Phaser.Scene) => {
     // PreloadScene is the one that listens for assets
@@ -28,17 +30,32 @@ export default function PlayPage() {
     }
   }, []);
 
-  // When PreloadScene is ready and we have assets, send them over
+  // When PreloadScene is ready, send assets and story data
   useEffect(() => {
-    if (sceneReady && assets && Object.keys(assets).length > 0 && !assetsSentRef.current) {
+    if (!sceneReady) return;
+
+    // Send assets
+    if (assets && Object.keys(assets).length > 0 && !assetsSentRef.current) {
       assetsSentRef.current = true;
-      // Small delay to ensure the EventBus listener in PreloadScene is registered
       const timer = setTimeout(() => {
         EventBus.emit("load-generated-assets", assets);
       }, 100);
       return () => clearTimeout(timer);
     }
   }, [sceneReady, assets]);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+
+    // Send story data for in-game chapter transitions
+    if (story && !storySentRef.current) {
+      storySentRef.current = true;
+      const timer = setTimeout(() => {
+        EventBus.emit("load-story-data", story);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [sceneReady, story]);
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-[var(--background)]">
