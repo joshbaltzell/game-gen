@@ -56,7 +56,6 @@ export class PreloadScene extends Phaser.Scene {
     // Also allow manual start via tap/click (fallback if no assets arrive)
     this.input.once("pointerdown", () => {
       if (!this.assetsLoaded) {
-        // Start with fallback sprites
         this.scene.start("GameScene", { levelIndex: 0 });
       }
     });
@@ -69,56 +68,53 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   private loadGeneratedAssets(assets: Record<string, string>): void {
-    const textureKeys = Object.keys(assets);
-    let loaded = 0;
-    let pending = 0;
+    const expectedKeys = new Set<string>();
 
-    textureKeys.forEach((key) => {
-      const base64 = assets[key];
+    Object.entries(assets).forEach(([key, base64]) => {
       if (base64 && typeof base64 === "string") {
-        pending++;
-        // addBase64 is async — listen for the file-complete event
+        expectedKeys.add(key);
+
+        // Remove the placeholder texture created by BootScene so we can
+        // replace it with the AI-generated version without collision
+        if (this.textures.exists(key)) {
+          this.textures.remove(key);
+        }
+
         this.textures.addBase64(key, `data:image/png;base64,${base64}`);
       }
     });
 
-    if (pending === 0) {
-      // No valid assets, just auto-start with fallbacks
+    if (expectedKeys.size === 0) {
       this.autoStartGame();
       return;
     }
 
-    // Listen for each texture to finish loading
-    const onTextureAdded = () => {
-      loaded++;
-      if (loaded >= pending) {
-        this.textures.off("onload", onTextureAdded);
-        this.textures.off("onerror", onTextureError);
-        this.assetsLoaded = true;
-        EventBus.emit("assets-loaded", { loaded, total: textureKeys.length });
-        this.autoStartGame();
+    let loaded = 0;
+    const total = expectedKeys.size;
+
+    // addBase64 is async — fires "addtexture" when each image finishes loading
+    const onTextureAdded = (addedKey: string) => {
+      if (expectedKeys.has(addedKey)) {
+        loaded++;
+        if (this.tapText) {
+          this.tapText.setText(`Loaded ${loaded} / ${total}...`);
+        }
+        if (loaded >= total) {
+          this.textures.off("addtexture", onTextureAdded);
+          this.assetsLoaded = true;
+          EventBus.emit("assets-loaded", { loaded, total });
+          this.autoStartGame();
+        }
       }
     };
 
-    const onTextureError = () => {
-      loaded++;
-      if (loaded >= pending) {
-        this.textures.off("onload", onTextureAdded);
-        this.textures.off("onerror", onTextureError);
-        this.assetsLoaded = true;
-        this.autoStartGame();
-      }
-    };
+    this.textures.on("addtexture", onTextureAdded);
 
-    this.textures.on("onload", onTextureAdded);
-    this.textures.on("onerror", onTextureError);
-
-    // Safety timeout — don't wait forever (10 seconds)
-    this.time.delayedCall(10000, () => {
+    // Safety timeout — don't wait forever (15 seconds)
+    this.time.delayedCall(15000, () => {
       if (!this.assetsLoaded) {
         this.assetsLoaded = true;
-        this.textures.off("onload", onTextureAdded);
-        this.textures.off("onerror", onTextureError);
+        this.textures.off("addtexture", onTextureAdded);
         this.autoStartGame();
       }
     });
@@ -139,7 +135,6 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   shutdown(): void {
-    // Clean up EventBus listeners when scene shuts down
     EventBus.off("load-generated-assets");
     EventBus.off("start-game");
   }

@@ -5,19 +5,19 @@ export class Player {
   public sprite: Phaser.Physics.Arcade.Sprite;
   public isInvulnerable: boolean = false;
   private scene: Phaser.Scene;
-  private moveSpeed: number = 250;
-  private jumpForce: number = -450;
+  private moveSpeed: number = 300;
+  private jumpForce: number = -580;
   private canJump: boolean = true;
   private jumpHeld: boolean = false;
-  private maxJumpHoldTime: number = 200;
+  private maxJumpHoldTime: number = 280;
   private jumpHoldTimer: number = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
     this.sprite = scene.physics.add.sprite(x, y, "hero-idle");
     this.sprite.setCollideWorldBounds(true);
-    this.sprite.setBounce(0.1);
-    this.sprite.setDragX(800);
+    this.sprite.setBounce(0.05);
+    this.sprite.setDragX(1000);
 
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     body.setSize(this.sprite.width * 0.7, this.sprite.height * 0.9);
@@ -28,15 +28,15 @@ export class Player {
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     const onGround = body.blocked.down || body.touching.down;
 
-    // Horizontal movement
+    // Horizontal movement — snappy acceleration
     if (controls.left) {
-      body.setAccelerationX(-1200);
+      body.setAccelerationX(-1400);
       this.sprite.setFlipX(true);
       if (onGround) {
         this.sprite.setTexture("hero-run");
       }
     } else if (controls.right) {
-      body.setAccelerationX(1200);
+      body.setAccelerationX(1400);
       this.sprite.setFlipX(false);
       if (onGround) {
         this.sprite.setTexture("hero-run");
@@ -48,7 +48,7 @@ export class Player {
       }
     }
 
-    // Jump - variable height
+    // Jump — variable height (tap for short hop, hold for full jump)
     if (onGround) {
       this.canJump = true;
       this.jumpHoldTimer = 0;
@@ -62,11 +62,11 @@ export class Player {
       this.jumpHoldTimer = 0;
     }
 
-    // Variable jump height - hold jump to go higher
+    // Hold jump for extra height
     if (this.jumpHeld && controls.jump) {
       this.jumpHoldTimer += this.scene.game.loop.delta;
       if (this.jumpHoldTimer < this.maxJumpHoldTime) {
-        body.setVelocityY(this.jumpForce * 0.8);
+        body.setVelocityY(this.jumpForce * 0.85);
       } else {
         this.jumpHeld = false;
       }
@@ -74,12 +74,17 @@ export class Player {
       this.jumpHeld = false;
     }
 
+    // Cut upward velocity when jump released for snappier short-hop control
+    if (!controls.jump && !onGround && body.velocity.y < -100) {
+      body.setVelocityY(body.velocity.y * 0.85);
+    }
+
     // Squash and stretch
     if (!onGround) {
       if (body.velocity.y < -100) {
-        this.sprite.setScale(0.9, 1.1); // Stretching up
+        this.sprite.setScale(0.9, 1.1);
       } else if (body.velocity.y > 100) {
-        this.sprite.setScale(1.1, 0.9); // Squashing down
+        this.sprite.setScale(1.1, 0.9);
       }
     } else {
       this.sprite.setScale(1, 1);
@@ -94,7 +99,7 @@ export class Player {
 
     // Knockback
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    body.setVelocityY(-250);
+    body.setVelocityY(-300);
 
     // Flash effect
     this.scene.tweens.add({
