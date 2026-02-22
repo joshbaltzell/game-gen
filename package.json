@@ -1,5 +1,5 @@
 {
-  "name": "game-generator-temp",
+  "name": "game-generator",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,8 +10,12 @@
   },
   "dependencies": {
     "next": "16.1.6",
+    "openai": "^6.22.0",
+    "phaser": "^3.90.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "sharp": "^0.34.5",
+    "zustand": "^5.0.11"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
