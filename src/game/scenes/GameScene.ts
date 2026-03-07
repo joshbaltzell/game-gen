@@ -43,24 +43,10 @@ export class GameScene extends Phaser.Scene {
     const worldWidth = this.levelData.width * this.levelData.tileSize;
     const worldHeight = this.levelData.height * this.levelData.tileSize;
 
-    // Background
-    const bgKey = this.textures.exists(this.levelData.backgroundKey)
-      ? this.levelData.backgroundKey
-      : null;
-
-    if (bgKey) {
-      this.add
-        .image(0, 0, bgKey)
-        .setOrigin(0, 0)
-        .setDisplaySize(worldWidth, worldHeight)
-        .setScrollFactor(0.5);
-    } else {
-      // Gradient background fallback — sized to world for zoom compatibility
-      const bg = this.add.graphics();
-      bg.fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e);
-      bg.fillRect(0, 0, worldWidth, worldHeight);
-      bg.setScrollFactor(0.3);
-    }
+    // Background — disabled for testing
+    // const bgKey = this.textures.exists(this.levelData.backgroundKey)
+    //   ? this.levelData.backgroundKey
+    //   : null;
 
     // Create platforms
     this.platforms = this.physics.add.staticGroup();
@@ -239,23 +225,14 @@ export class GameScene extends Phaser.Scene {
       collectibles: this.collectiblesFound,
     });
 
-    this.time.delayedCall(1000, () => {
+    this.time.delayedCall(500, () => {
       // Check if there are more levels
       if (this.levelIndex < 2) {
-        // Read story from registry for chapter interleaving
-        const story = this.registry.get("story") as {
-          chapters: { title: string; narrative: string; objective: string }[];
-        } | null;
-        const nextChapter = story?.chapters?.[this.levelIndex + 1];
-
-        this.scene.start("LevelTransitionScene", {
-          nextLevelIndex: this.levelIndex + 1,
+        // Skip transition screen — go straight to next level for testing
+        this.scene.start("GameScene", {
+          levelIndex: this.levelIndex + 1,
           score: this.score,
           lives: this.lives,
-          chapterTitle: nextChapter?.title || "",
-          chapterNarrative: nextChapter?.narrative || "",
-          chapterObjective: nextChapter?.objective || "",
-          illustrationKey: `chapter-illustration-${this.levelIndex + 1}`,
         });
       } else {
         this.scene.start("GameOverScene", {
@@ -291,7 +268,7 @@ export class GameScene extends Phaser.Scene {
       enemySprite.destroy();
       this.score += 200;
       // Bounce player up
-      (playerSprite.body as Phaser.Physics.Arcade.Body).setVelocityY(-350);
+      (playerSprite.body as Phaser.Physics.Arcade.Body).setVelocityY(-500);
       EventBus.emit("score-update", { score: this.score });
     } else {
       // Player takes damage

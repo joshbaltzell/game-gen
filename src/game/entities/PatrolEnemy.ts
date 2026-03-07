@@ -4,7 +4,7 @@ export class PatrolEnemy {
   public sprite: Phaser.Physics.Arcade.Sprite;
   private startX: number;
   private patrolDistance: number;
-  private speed: number = 80;
+  private speed: number = 120;
   private direction: number = 1;
 
   constructor(

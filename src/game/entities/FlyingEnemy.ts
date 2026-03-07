@@ -3,8 +3,8 @@ import Phaser from "phaser";
 export class FlyingEnemy {
   public sprite: Phaser.Physics.Arcade.Sprite;
   private startY: number;
-  private amplitude: number = 50;
-  private frequency: number = 0.002;
+  private amplitude: number = 65;
+  private frequency: number = 0.003;
   private time: number = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {

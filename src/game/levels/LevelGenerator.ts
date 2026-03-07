@@ -16,9 +16,10 @@ import type {
 //   • Every gap has stepping-stone platforms within physics reach
 //
 // Player physics (from Player.ts):
-//   jump -580, gravity 800, speed 300, hold 280 ms
-//   → tap jump ≈ 3.3 tiles high, hold jump ≈ 4.2 tiles high
-//   → horizontal reach ≈ 5-6 tiles during a full jump
+//   jump -720, gravity 1400 (+560 on fall), speed 340, hold 180 ms
+//   → tap jump ≈ 2.5 tiles high, hold jump ≈ 3.8 tiles high
+//   → horizontal reach ≈ 5 tiles during a full jump
+//   → coyote time 80ms, jump buffer 100ms
 //
 // All chunks are designed within these limits.
 // ---------------------------------------------------------------------------
@@ -332,6 +333,135 @@ const CHUNKS: ChunkDef[] = [
       [12, 2],
     ],
   },
+
+  // ═══════════════════════════════════════════════════
+  // EXTRA HARD — Difficulty 2+ and 3 (tighter platforming)
+  // ═══════════════════════════════════════════════════
+
+  // Pit run — consecutive small gaps with enemies between
+  {
+    name: "pit_run",
+    width: 16,
+    minDiff: 2,
+    ground: [
+      [0, 2],
+      [4, 2],
+      [8, 2],
+      [12, 2],
+      [14, 2],
+    ],
+    platforms: [],
+    enemies: [
+      { tile: 5, above: 1, type: "patrol", dist: 1 },
+      { tile: 9, above: 1, type: "patrol", dist: 1 },
+      { tile: 13, above: 1, type: "patrol", dist: 1 },
+    ],
+    coins: [
+      [3, 2],
+      [7, 2],
+      [11, 2],
+    ],
+  },
+
+  // Sentry towers — stacked enemies on platforms
+  {
+    name: "sentry_towers",
+    width: 12,
+    minDiff: 2,
+    ground: [[0, 12]],
+    platforms: [
+      [2, 2, 2],
+      [5, 3, 2],
+      [8, 2, 2],
+    ],
+    enemies: [
+      { tile: 3, above: 3, type: "patrol", dist: 1 },
+      { tile: 6, above: 4, type: "patrol", dist: 1 },
+      { tile: 9, above: 3, type: "patrol", dist: 1 },
+      { tile: 6, above: 6, type: "flying" },
+    ],
+    coins: [
+      [3, 4],
+      [6, 5],
+      [9, 4],
+    ],
+  },
+
+  // Leap of faith — wide gaps with tiny landing zones
+  {
+    name: "leap_of_faith",
+    width: 16,
+    minDiff: 3,
+    ground: [
+      [0, 2],
+      [14, 2],
+    ],
+    platforms: [
+      [4, 1, 1],
+      [7, 2, 1],
+      [10, 1, 1],
+    ],
+    enemies: [
+      { tile: 6, above: 4, type: "flying" },
+      { tile: 9, above: 3, type: "flying" },
+    ],
+    coins: [
+      [4, 2],
+      [7, 3],
+      [10, 2],
+    ],
+  },
+
+  // Gauntlet v2 — ground enemies with flying sentries above
+  {
+    name: "gauntlet_v2",
+    width: 16,
+    minDiff: 3,
+    ground: [[0, 16]],
+    platforms: [
+      [3, 3, 3],
+      [9, 3, 3],
+    ],
+    enemies: [
+      { tile: 2, above: 1, type: "patrol", dist: 2 },
+      { tile: 6, above: 1, type: "patrol", dist: 2 },
+      { tile: 10, above: 1, type: "patrol", dist: 2 },
+      { tile: 13, above: 1, type: "patrol", dist: 2 },
+      { tile: 5, above: 5, type: "flying" },
+      { tile: 11, above: 5, type: "flying" },
+    ],
+    coins: [
+      [4, 4],
+      [7, 2],
+      [10, 4],
+      [14, 2],
+    ],
+  },
+
+  // Cascade drop — descending platforms over void
+  {
+    name: "cascade",
+    width: 14,
+    minDiff: 3,
+    ground: [
+      [0, 2],
+      [12, 2],
+    ],
+    platforms: [
+      [3, 3, 2],
+      [6, 2, 2],
+      [9, 1, 2],
+    ],
+    enemies: [
+      { tile: 4, above: 4, type: "flying" },
+      { tile: 7, above: 3, type: "flying" },
+    ],
+    coins: [
+      [4, 4],
+      [7, 3],
+      [10, 2],
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -351,7 +481,7 @@ export class LevelGenerator {
     const powerUps: PowerUpPlacement[] = [];
 
     // Number of middle chunks scales with difficulty
-    const chunkCount = 5 + difficulty * 2; // 7, 9, 11
+    const chunkCount = 6 + difficulty * 3; // 9, 12, 15
 
     // ── Intro: safe flat ground ──
     let curX = 0;
@@ -446,8 +576,8 @@ export class LevelGenerator {
 
     // Enemies (scale count with difficulty — skip some on easy)
     for (const e of chunk.enemies) {
-      // On difficulty 1, only 50% of enemies spawn; on 2, 75%; on 3, 100%
-      if (Math.random() < 0.25 + difficulty * 0.25) {
+      // On difficulty 1, 70% of enemies spawn; on 2, 85%; on 3, 100%
+      if (Math.random() < 0.55 + difficulty * 0.15) {
         const worldX = (startX + e.tile) * ts;
         const worldY = (this.GROUND_ROW - e.above) * ts;
 

@@ -18,7 +18,7 @@ export function StartGame(containerId: string): Phaser.Game {
     physics: {
       default: "arcade",
       arcade: {
-        gravity: { x: 0, y: 800 },
+        gravity: { x: 0, y: 1400 },
         debug: false,
       },
     },
@@ -32,7 +32,7 @@ export function StartGame(containerId: string): Phaser.Game {
     pixelArt: true,
     roundPixels: true,
     antialias: false,
-    backgroundColor: "#1a1a2e",
+    backgroundColor: "#0b132b",
     input: {
       activePointers: 3,
     },

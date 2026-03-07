@@ -6,41 +6,58 @@ export class Player {
   public isInvulnerable: boolean = false;
   public isStarPowered: boolean = false;
   private scene: Phaser.Scene;
-  private moveSpeed: number = 300;
-  private jumpForce: number = -580;
+  private moveSpeed: number = 340;
+  private jumpForce: number = -720;
   private canJump: boolean = true;
   private jumpHeld: boolean = false;
-  private maxJumpHoldTime: number = 280;
+  private maxJumpHoldTime: number = 180;
   private jumpHoldTimer: number = 0;
-  private baseSpeed: number = 300;
+  private baseSpeed: number = 340;
   private starTimer?: Phaser.Time.TimerEvent;
   private starTintTimer?: Phaser.Time.TimerEvent;
+
+  // Coyote time — brief grace period after leaving a platform
+  private coyoteTime: number = 80; // ms
+  private coyoteTimer: number = 0;
+
+  // Jump buffering — register jump input slightly before landing
+  private jumpBufferTime: number = 100; // ms
+  private jumpBufferTimer: number = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
     this.sprite = scene.physics.add.sprite(x, y, "hero-idle");
     this.sprite.setCollideWorldBounds(true);
-    this.sprite.setBounce(0.05);
-    this.sprite.setDragX(1000);
+    this.sprite.setBounce(0.0);
+    this.sprite.setDragX(2000);
 
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     body.setSize(this.sprite.width * 0.7, this.sprite.height * 0.9);
     body.setMaxVelocityX(this.moveSpeed);
+    body.setMaxVelocityY(1200);
   }
 
   update(controls: TouchControls): void {
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
     const onGround = body.blocked.down || body.touching.down;
+    const delta = this.scene.game.loop.delta;
 
-    // Horizontal movement — snappy acceleration
+    // ── Asymmetric gravity: fall faster than rise (Mario-like) ──
+    if (!onGround && body.velocity.y > 0) {
+      body.setGravityY(560);
+    } else {
+      body.setGravityY(0);
+    }
+
+    // ── Horizontal movement — instant acceleration ──
     if (controls.left) {
-      body.setAccelerationX(-1400);
+      body.setAccelerationX(-2200);
       this.sprite.setFlipX(true);
       if (onGround) {
         this.sprite.setTexture("hero-run");
       }
     } else if (controls.right) {
-      body.setAccelerationX(1400);
+      body.setAccelerationX(2200);
       this.sprite.setFlipX(false);
       if (onGround) {
         this.sprite.setTexture("hero-run");
@@ -52,25 +69,41 @@ export class Player {
       }
     }
 
-    // Jump — variable height (tap for short hop, hold for full jump)
+    // ── Coyote time tracking ──
     if (onGround) {
+      this.coyoteTimer = this.coyoteTime;
       this.canJump = true;
       this.jumpHoldTimer = 0;
       this.jumpHeld = false;
+    } else {
+      this.coyoteTimer -= delta;
     }
 
-    if (controls.jumpJustPressed && this.canJump && onGround) {
+    // ── Jump buffer ──
+    if (controls.jumpJustPressed) {
+      this.jumpBufferTimer = this.jumpBufferTime;
+    } else {
+      this.jumpBufferTimer -= delta;
+    }
+
+    // ── Jump with coyote time and input buffer ──
+    const canJumpNow = onGround || this.coyoteTimer > 0;
+    const wantsJump = this.jumpBufferTimer > 0;
+
+    if (wantsJump && this.canJump && canJumpNow) {
       body.setVelocityY(this.jumpForce);
       this.canJump = false;
       this.jumpHeld = true;
       this.jumpHoldTimer = 0;
+      this.coyoteTimer = 0;
+      this.jumpBufferTimer = 0;
     }
 
     // Hold jump for extra height
     if (this.jumpHeld && controls.jump) {
-      this.jumpHoldTimer += this.scene.game.loop.delta;
+      this.jumpHoldTimer += delta;
       if (this.jumpHoldTimer < this.maxJumpHoldTime) {
-        body.setVelocityY(this.jumpForce * 0.85);
+        body.setVelocityY(this.jumpForce * 0.88);
       } else {
         this.jumpHeld = false;
       }
@@ -78,17 +111,17 @@ export class Player {
       this.jumpHeld = false;
     }
 
-    // Cut upward velocity when jump released for snappier short-hop control
-    if (!controls.jump && !onGround && body.velocity.y < -100) {
-      body.setVelocityY(body.velocity.y * 0.85);
+    // Cut upward velocity when jump released — aggressive for short hops
+    if (!controls.jump && !onGround && body.velocity.y < -50) {
+      body.setVelocityY(body.velocity.y * 0.6);
     }
 
-    // Squash and stretch
+    // ── Squash and stretch ──
     if (!onGround) {
       if (body.velocity.y < -100) {
-        this.sprite.setScale(0.9, 1.1);
+        this.sprite.setScale(0.88, 1.12);
       } else if (body.velocity.y > 100) {
-        this.sprite.setScale(1.1, 0.9);
+        this.sprite.setScale(1.12, 0.88);
       }
     } else {
       this.sprite.setScale(1, 1);
@@ -154,7 +187,7 @@ export class Player {
 
     // Knockback
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
-    body.setVelocityY(-300);
+    body.setVelocityY(-400);
 
     // Flash effect
     this.scene.tweens.add({
