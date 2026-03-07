@@ -24,6 +24,8 @@ export function weaponTypeFromText(text: string): WeaponType {
   return "fireball";
 }
 
+type HeroAnimState = "idle" | "run" | "jump" | "fall" | "turn" | "attack" | "celebrate";
+
 export class Player {
   public sprite: Phaser.Physics.Arcade.Sprite;
   public isInvulnerable: boolean = false;
@@ -54,6 +56,11 @@ export class Player {
   private fireCooldownTime: number = 350; // ms between shots
   private facingRight: boolean = true;
 
+  // Animation state
+  private animState: HeroAnimState = "idle";
+  private attackAnimTimer: number = 0;
+  private celebrating: boolean = false;
+
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
     this.sprite = scene.physics.add.sprite(x, y, "hero-idle");
@@ -80,25 +87,25 @@ export class Player {
     }
 
     // ── Horizontal movement — instant acceleration ──
-    if (controls.left) {
+    const movingLeft = controls.left;
+    const movingRight = controls.right;
+
+    // Detect turn/skid: pressing opposite direction to velocity
+    const isTurning =
+      onGround &&
+      ((movingLeft && body.velocity.x > 80) ||
+        (movingRight && body.velocity.x < -80));
+
+    if (movingLeft) {
       body.setAccelerationX(-2200);
       this.sprite.setFlipX(true);
       this.facingRight = false;
-      if (onGround) {
-        this.sprite.setTexture("hero-run");
-      }
-    } else if (controls.right) {
+    } else if (movingRight) {
       body.setAccelerationX(2200);
       this.sprite.setFlipX(false);
       this.facingRight = true;
-      if (onGround) {
-        this.sprite.setTexture("hero-run");
-      }
     } else {
       body.setAccelerationX(0);
-      if (onGround) {
-        this.sprite.setTexture("hero-idle");
-      }
     }
 
     // ── Coyote time tracking ──
@@ -164,6 +171,21 @@ export class Player {
     if (controls.fireJustPressed && this.fireCooldown <= 0) {
       this.fire();
       this.fireCooldown = this.fireCooldownTime;
+      this.attackAnimTimer = 200; // show attack anim for 200ms
+    }
+
+    // ── Animation state machine ──
+    if (this.attackAnimTimer > 0) {
+      this.attackAnimTimer -= delta;
+    }
+
+    // Stop celebrating if player starts moving
+    if (this.celebrating && (movingLeft || movingRight)) {
+      this.stopCelebrate();
+    }
+
+    if (!this.celebrating) {
+      this.updateAnimState(onGround, movingLeft || movingRight, isTurning, body.velocity.y);
     }
 
     // Clean up destroyed projectiles
@@ -243,6 +265,52 @@ export class Player {
 
     this.sprite.clearTint();
     this.sprite.setAlpha(1);
+  }
+
+  /** Determine and play the correct animation based on game state */
+  private updateAnimState(
+    onGround: boolean,
+    isMoving: boolean,
+    isTurning: boolean,
+    velocityY: number,
+  ): void {
+    let newState: HeroAnimState;
+
+    if (this.attackAnimTimer > 0) {
+      newState = "attack";
+    } else if (!onGround) {
+      newState = velocityY < 0 ? "jump" : "fall";
+    } else if (isTurning) {
+      newState = "turn";
+    } else if (isMoving) {
+      newState = "run";
+    } else {
+      newState = "idle";
+    }
+
+    if (newState !== this.animState) {
+      this.animState = newState;
+      this.playAnim(`hero-anim-${newState}`);
+    }
+  }
+
+  /** Play an animation if it exists, otherwise fall back to the static texture */
+  private playAnim(key: string): void {
+    if (this.scene.anims.exists(key)) {
+      this.sprite.play(key, true);
+    }
+  }
+
+  /** Start celebration animation (call on level complete / boss defeat) */
+  playCelebrate(): void {
+    this.celebrating = true;
+    this.animState = "celebrate";
+    this.playAnim("hero-anim-celebrate");
+  }
+
+  /** Stop celebration and return to normal animation state */
+  stopCelebrate(): void {
+    this.celebrating = false;
   }
 
   takeDamage(): void {

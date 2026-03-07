@@ -33,7 +33,393 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     this.createPlaceholderTextures();
+    this.createHeroAnimations();
     this.scene.start("PreloadScene");
+  }
+
+  /** Register all hero animations after textures exist */
+  private createHeroAnimations(): void {
+    // Idle — gentle breathing cycle
+    this.anims.create({
+      key: "hero-anim-idle",
+      frames: [
+        { key: "hero-idle-0" },
+        { key: "hero-idle-1" },
+        { key: "hero-idle-2" },
+        { key: "hero-idle-1" },
+      ],
+      frameRate: 3,
+      repeat: -1,
+    });
+
+    // Run — 4-frame run cycle
+    this.anims.create({
+      key: "hero-anim-run",
+      frames: [
+        { key: "hero-run-0" },
+        { key: "hero-run-1" },
+        { key: "hero-run-2" },
+        { key: "hero-run-3" },
+      ],
+      frameRate: 10,
+      repeat: -1,
+    });
+
+    // Jump — single ascending frame
+    this.anims.create({
+      key: "hero-anim-jump",
+      frames: [{ key: "hero-jump-0" }],
+      frameRate: 1,
+      repeat: 0,
+    });
+
+    // Fall — single descending frame
+    this.anims.create({
+      key: "hero-anim-fall",
+      frames: [{ key: "hero-fall-0" }],
+      frameRate: 1,
+      repeat: 0,
+    });
+
+    // Turn/skid
+    this.anims.create({
+      key: "hero-anim-turn",
+      frames: [{ key: "hero-turn-0" }],
+      frameRate: 1,
+      repeat: 0,
+    });
+
+    // Attack — quick 2-frame punch
+    this.anims.create({
+      key: "hero-anim-attack",
+      frames: [
+        { key: "hero-attack-0" },
+        { key: "hero-attack-1" },
+      ],
+      frameRate: 12,
+      repeat: 0,
+    });
+
+    // Celebrate — pumping fists
+    this.anims.create({
+      key: "hero-anim-celebrate",
+      frames: [
+        { key: "hero-celebrate-0" },
+        { key: "hero-celebrate-1" },
+        { key: "hero-celebrate-2" },
+        { key: "hero-celebrate-1" },
+      ],
+      frameRate: 6,
+      repeat: -1,
+    });
+  }
+
+  /** Draw all hero sprite frames programmatically in SNES pixel-art style */
+  private createHeroFrames(): void {
+    const C = {
+      outline: 0x0b132b,
+      body: 0x2ec4b6,
+      bodyDk: 0x1a936f,
+      bodyLt: 0x7efce0,
+      visor: 0xffffff,
+      eye: 0x0b132b,
+      boot: 0x1a936f,
+      bootDk: 0x146b54,
+      belt: 0xf4a261,
+      arm: 0x2ec4b6,
+    };
+
+    // ── Helper: draw the base hero with variable limb positions ──
+    const drawHero = (
+      g: Phaser.GameObjects.Graphics,
+      opts: {
+        bodyY?: number;  // vertical offset for body bob
+        lLegX?: number; lLegY?: number;  // left leg offset
+        rLegX?: number; rLegY?: number;  // right leg offset
+        lArmX?: number; lArmY?: number; lArmW?: number; lArmH?: number;
+        rArmX?: number; rArmY?: number; rArmW?: number; rArmH?: number;
+        mouthOpen?: boolean;
+        eyesBlink?: boolean;
+        armRaise?: number; // 0 = normal, 1 = half up, 2 = full up
+      } = {},
+    ) => {
+      const by = opts.bodyY ?? 0;
+
+      // ── Outline layer (draw everything 1px bigger first) ──
+      g.fillStyle(C.outline, 1);
+
+      // Head outline
+      g.fillRoundedRect(9, 2 + by, 30, 20, 4);
+      // Body outline
+      g.fillRoundedRect(11, 18 + by, 26, 16, 3);
+
+      // ── Boots / legs ──
+      const llx = 12 + (opts.lLegX ?? 0);
+      const lly = 34 + (opts.lLegY ?? 0) + by;
+      const rlx = 28 + (opts.rLegX ?? 0);
+      const rly = 34 + (opts.rLegY ?? 0) + by;
+
+      // Boot outlines
+      g.fillRoundedRect(llx - 1, lly - 1, 10, 12, 2);
+      g.fillRoundedRect(rlx - 1, rly - 1, 10, 12, 2);
+      // Boot fill
+      g.fillStyle(C.boot, 1);
+      g.fillRoundedRect(llx, lly, 8, 10, 2);
+      g.fillRoundedRect(rlx, rly, 8, 10, 2);
+      // Boot sole
+      g.fillStyle(C.bootDk, 1);
+      g.fillRect(llx, lly + 7, 8, 3);
+      g.fillRect(rlx, rly + 7, 8, 3);
+
+      // ── Body ──
+      g.fillStyle(C.body, 1);
+      g.fillRoundedRect(12, 19 + by, 24, 14, 3);
+      // Body shading
+      g.fillStyle(C.bodyDk, 1);
+      g.fillRect(12, 29 + by, 24, 4);
+      // Belt
+      g.fillStyle(C.belt, 1);
+      g.fillRect(14, 27 + by, 20, 3);
+
+      // ── Arms ──
+      const armRaise = opts.armRaise ?? 0;
+      const defArmY = armRaise === 2 ? 10 : armRaise === 1 ? 15 : 20;
+
+      const lax = opts.lArmX ?? 6;
+      const lay = (opts.lArmY ?? defArmY) + by;
+      const law = opts.lArmW ?? 8;
+      const lah = opts.lArmH ?? 12;
+      const rax = opts.rArmX ?? 34;
+      const ray = (opts.rArmY ?? defArmY) + by;
+      const raw = opts.rArmW ?? 8;
+      const rah = opts.rArmH ?? 12;
+
+      // Arm outlines
+      g.fillStyle(C.outline, 1);
+      g.fillRoundedRect(lax - 1, lay - 1, law + 2, lah + 2, 2);
+      g.fillRoundedRect(rax - 1, ray - 1, raw + 2, rah + 2, 2);
+      // Arm fills
+      g.fillStyle(C.arm, 1);
+      g.fillRoundedRect(lax, lay, law, lah, 2);
+      g.fillRoundedRect(rax, ray, raw, rah, 2);
+      // Arm highlight
+      g.fillStyle(C.bodyLt, 0.3);
+      g.fillRect(lax + 1, lay + 1, 3, lah - 3);
+      g.fillRect(rax + 1, ray + 1, 3, rah - 3);
+
+      // ── Head ──
+      g.fillStyle(C.body, 1);
+      g.fillRoundedRect(10, 3 + by, 28, 18, 4);
+      // Helmet top highlight
+      g.fillStyle(C.bodyLt, 0.5);
+      g.fillRoundedRect(14, 3 + by, 20, 4, 2);
+      // Helmet dark stripe
+      g.fillStyle(C.bodyDk, 1);
+      g.fillRect(10, 8 + by, 28, 2);
+
+      // ── Visor ──
+      g.fillStyle(C.visor, 1);
+      g.fillRoundedRect(14, 11 + by, 20, 7, 2);
+      // Visor shine
+      g.fillStyle(C.bodyLt, 0.4);
+      g.fillRect(15, 11 + by, 8, 2);
+
+      // ── Eyes (inside visor) ──
+      if (!opts.eyesBlink) {
+        g.fillStyle(C.eye, 1);
+        g.fillRect(17, 13 + by, 4, 4);
+        g.fillRect(27, 13 + by, 4, 4);
+        // Eye highlights
+        g.fillStyle(0xffffff, 0.8);
+        g.fillRect(18, 13 + by, 2, 2);
+        g.fillRect(28, 13 + by, 2, 2);
+      } else {
+        // Blink — just a line
+        g.fillStyle(C.eye, 1);
+        g.fillRect(17, 15 + by, 4, 1);
+        g.fillRect(27, 15 + by, 4, 1);
+      }
+
+      // ── Mouth area ──
+      if (opts.mouthOpen) {
+        g.fillStyle(C.outline, 1);
+        g.fillRect(20, 19 + by, 8, 3);
+      }
+
+      // ── Body highlight ──
+      g.fillStyle(C.bodyLt, 0.25);
+      g.fillRect(13, 20 + by, 4, 8);
+    };
+
+    // ════════════════════════════════════════
+    // IDLE frames (3) — subtle breathing bob
+    // ════════════════════════════════════════
+    for (let i = 0; i < 3; i++) {
+      const g = this.add.graphics();
+      drawHero(g, {
+        bodyY: i === 1 ? -1 : i === 2 ? 0 : 0,
+        eyesBlink: i === 2, // blink on frame 2
+      });
+      g.generateTexture(`hero-idle-${i}`, 48, 48);
+      g.destroy();
+    }
+
+    // Also generate the old static keys for backwards compat
+    const idleCompat = this.add.graphics();
+    drawHero(idleCompat, {});
+    idleCompat.generateTexture("hero-idle", 48, 48);
+    idleCompat.destroy();
+
+    // ════════════════════════════════════════
+    // RUN frames (4) — classic run cycle
+    // ════════════════════════════════════════
+    const runPoses = [
+      // Frame 0: right leg forward, left leg back
+      { lLegX: -4, lLegY: -4, rLegX: 4, rLegY: 2, lArmX: 34, lArmY: 18, rArmX: 4, rArmY: 22, bodyY: 0 },
+      // Frame 1: passing (legs together, body up)
+      { lLegX: 0, lLegY: 0, rLegX: 0, rLegY: 0, bodyY: -2 },
+      // Frame 2: left leg forward, right leg back
+      { lLegX: 4, lLegY: 2, rLegX: -4, rLegY: -4, lArmX: 4, lArmY: 22, rArmX: 34, rArmY: 18, bodyY: 0 },
+      // Frame 3: passing (legs together, body up)
+      { lLegX: 0, lLegY: -1, rLegX: 0, rLegY: -1, bodyY: -2 },
+    ];
+    for (let i = 0; i < 4; i++) {
+      const g = this.add.graphics();
+      drawHero(g, runPoses[i]);
+      g.generateTexture(`hero-run-${i}`, 48, 48);
+      g.destroy();
+    }
+
+    // Static run key for compat
+    const runCompat = this.add.graphics();
+    drawHero(runCompat, runPoses[0]);
+    runCompat.generateTexture("hero-run", 48, 48);
+    runCompat.destroy();
+
+    // ════════════════════════════════════════
+    // JUMP frame — arms up, legs tucked
+    // ════════════════════════════════════════
+    {
+      const g = this.add.graphics();
+      drawHero(g, {
+        bodyY: -2,
+        lLegX: 2, lLegY: -3, rLegX: -2, rLegY: -3,
+        armRaise: 2,
+        lArmX: 4, lArmW: 7, lArmH: 10,
+        rArmX: 36, rArmW: 7, rArmH: 10,
+      });
+      g.generateTexture("hero-jump-0", 48, 48);
+      g.destroy();
+    }
+
+    // ════════════════════════════════════════
+    // FALL frame — arms out, legs spread
+    // ════════════════════════════════════════
+    {
+      const g = this.add.graphics();
+      drawHero(g, {
+        bodyY: 1,
+        lLegX: -3, lLegY: 2, rLegX: 3, rLegY: 2,
+        lArmX: 2, lArmY: 16, lArmW: 9, lArmH: 10,
+        rArmX: 37, rArmY: 16, rArmW: 9, rArmH: 10,
+      });
+      g.generateTexture("hero-fall-0", 48, 48);
+      g.destroy();
+    }
+
+    // ════════════════════════════════════════
+    // TURN/SKID frame — leaning back
+    // ════════════════════════════════════════
+    {
+      const g = this.add.graphics();
+      drawHero(g, {
+        bodyY: 1,
+        lLegX: 4, lLegY: 1, rLegX: -2, rLegY: 0,
+        lArmX: 4, lArmY: 24, lArmW: 8, lArmH: 8,
+        rArmX: 34, rArmY: 18, rArmW: 8, rArmH: 10,
+      });
+      // Dust puff behind character
+      g.fillStyle(0xffffff, 0.3);
+      g.fillCircle(8, 42, 5);
+      g.fillCircle(4, 40, 3);
+      g.generateTexture("hero-turn-0", 48, 48);
+      g.destroy();
+    }
+
+    // ════════════════════════════════════════
+    // ATTACK frames (2) — arm thrust forward
+    // ════════════════════════════════════════
+    {
+      // Frame 0: wind up — arm pulled back
+      const g0 = this.add.graphics();
+      drawHero(g0, {
+        lArmX: 2, lArmY: 18, lArmW: 8, lArmH: 10,
+        rArmX: 32, rArmY: 22, rArmW: 10, rArmH: 8,
+        bodyY: 1,
+      });
+      g0.generateTexture("hero-attack-0", 48, 48);
+      g0.destroy();
+
+      // Frame 1: thrust — arm extended forward with energy
+      const g1 = this.add.graphics();
+      drawHero(g1, {
+        lArmX: 2, lArmY: 20, lArmW: 7, lArmH: 10,
+        rArmX: 36, rArmY: 18, rArmW: 12, rArmH: 8,
+        bodyY: -1,
+      });
+      // Muzzle flash / energy burst
+      g1.fillStyle(0xffdd00, 0.7);
+      g1.fillCircle(47, 22, 5);
+      g1.fillStyle(0xffffff, 0.5);
+      g1.fillCircle(47, 22, 3);
+      g1.generateTexture("hero-attack-1", 48, 48);
+      g1.destroy();
+    }
+
+    // ════════════════════════════════════════
+    // CELEBRATE frames (3) — victory fist pump
+    // ════════════════════════════════════════
+    {
+      // Frame 0: arms down, about to jump
+      const g0 = this.add.graphics();
+      drawHero(g0, { bodyY: 2, mouthOpen: true });
+      g0.generateTexture("hero-celebrate-0", 48, 48);
+      g0.destroy();
+
+      // Frame 1: jump with one arm up
+      const g1 = this.add.graphics();
+      drawHero(g1, {
+        bodyY: -4,
+        lLegX: -2, lLegY: -2, rLegX: 2, rLegY: -2,
+        armRaise: 1,
+        rArmX: 36, rArmY: 6, rArmW: 8, rArmH: 10,
+        mouthOpen: true,
+      });
+      // Sparkle
+      g1.fillStyle(0xffd700, 1);
+      g1.fillRect(40, 2, 3, 3);
+      g1.fillRect(44, 6, 2, 2);
+      g1.generateTexture("hero-celebrate-1", 48, 48);
+      g1.destroy();
+
+      // Frame 2: both arms up, peak of jump
+      const g2 = this.add.graphics();
+      drawHero(g2, {
+        bodyY: -6,
+        lLegX: -3, lLegY: -4, rLegX: 3, rLegY: -4,
+        armRaise: 2,
+        mouthOpen: true,
+      });
+      // Sparkles
+      g2.fillStyle(0xffd700, 1);
+      g2.fillRect(2, 2, 3, 3);
+      g2.fillRect(42, 0, 3, 3);
+      g2.fillStyle(0xffffff, 0.8);
+      g2.fillRect(6, 6, 2, 2);
+      g2.fillRect(38, 4, 2, 2);
+      g2.generateTexture("hero-celebrate-2", 48, 48);
+      g2.destroy();
+    }
   }
 
   private createPlaceholderTextures(): void {
@@ -62,39 +448,15 @@ export class BootScene extends Phaser.Scene {
     dpadThumb.generateTexture("dpad-thumb", 60, 60);
     dpadThumb.destroy();
 
-    // ── Hero — teal body with white visor ──
-    const heroGfx = this.add.graphics();
-    // Body
-    heroGfx.fillStyle(0x2ec4b6, 1);
-    heroGfx.fillRoundedRect(4, 4, 40, 40, 6);
-    // Visor
-    heroGfx.fillStyle(0xffffff, 1);
-    heroGfx.fillRect(10, 12, 28, 8);
-    // Eyes
-    heroGfx.fillStyle(0x0b132b, 1);
-    heroGfx.fillRect(14, 13, 6, 6);
-    heroGfx.fillRect(26, 13, 6, 6);
-    // Feet
-    heroGfx.fillStyle(0x1a936f, 1);
-    heroGfx.fillRect(8, 38, 12, 8);
-    heroGfx.fillRect(28, 38, 12, 8);
-    heroGfx.generateTexture("hero-idle", 48, 48);
-    heroGfx.destroy();
+    // ══════════════════════════════════════════════════════
+    // HERO — SNES-style animated character (Mega Man / Mario vibe)
+    //
+    // Palette: teal #2ec4b6, dark teal #1a936f, highlight #7efce0
+    //          outline #0b132b, visor white, eyes dark, boots dark teal
+    // Canvas: 48x48 per frame
+    // ══════════════════════════════════════════════════════
 
-    // Hero run — shifted legs
-    const heroRunGfx = this.add.graphics();
-    heroRunGfx.fillStyle(0x2ec4b6, 1);
-    heroRunGfx.fillRoundedRect(4, 4, 40, 40, 6);
-    heroRunGfx.fillStyle(0xffffff, 1);
-    heroRunGfx.fillRect(10, 12, 28, 8);
-    heroRunGfx.fillStyle(0x0b132b, 1);
-    heroRunGfx.fillRect(14, 13, 6, 6);
-    heroRunGfx.fillRect(26, 13, 6, 6);
-    heroRunGfx.fillStyle(0x1a936f, 1);
-    heroRunGfx.fillRect(6, 38, 12, 8);
-    heroRunGfx.fillRect(30, 34, 12, 8);
-    heroRunGfx.generateTexture("hero-run", 48, 48);
-    heroRunGfx.destroy();
+    this.createHeroFrames();
 
     // ── Enemy A — coral spiky blob (patrol) ──
     const enemyGfx = this.add.graphics();

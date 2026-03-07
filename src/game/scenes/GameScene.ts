@@ -369,6 +369,7 @@ export class GameScene extends Phaser.Scene {
     if (this.isLevelComplete) return;
     if (this.exitPortalLocked) return; // Boss must be defeated first
     this.isLevelComplete = true;
+    this.player.playCelebrate();
 
     EventBus.emit("level-complete", {
       level: this.levelIndex + 1,
@@ -701,6 +702,7 @@ export class GameScene extends Phaser.Scene {
   private onBossDefeated(): void {
     this.bossDefeated = true;
     this.exitPortalLocked = false;
+    this.player.playCelebrate();
 
     // Show exit portal
     this.exitPortal.setAlpha(1);
