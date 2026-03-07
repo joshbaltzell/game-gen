@@ -32,6 +32,8 @@ interface ChunkDef {
   width: number;
   /** Minimum difficulty level (1-3) for this chunk to appear */
   minDiff: number;
+  /** Chunk role for pacing: "breather" chunks give the player a rest */
+  role?: "breather" | "combat" | "platforming";
   /** Ground segments: [startTile, widthTiles][] — ground at GROUND_ROW */
   ground: [number, number][];
   /** Floating platforms: [startTile, tilesAboveGround, widthTiles][] */
@@ -56,11 +58,12 @@ const CHUNKS: ChunkDef[] = [
   // EASY — Difficulty 1+ (appear in all levels)
   // ═══════════════════════════════════════════════════
 
-  // Flat run with coin arc
+  // Flat run with coin arc (breather)
   {
     name: "flat_coins",
     width: 8,
     minDiff: 1,
+    role: "breather",
     ground: [[0, 8]],
     platforms: [],
     enemies: [],
@@ -68,6 +71,28 @@ const CHUNKS: ChunkDef[] = [
       [2, 2],
       [4, 2],
       [6, 2],
+    ],
+  },
+
+  // Reward room — lots of coins, safe ground (breather)
+  {
+    name: "reward_room",
+    width: 10,
+    minDiff: 1,
+    role: "breather",
+    ground: [[0, 10]],
+    platforms: [
+      [2, 2, 3],
+      [6, 2, 3],
+    ],
+    enemies: [],
+    coins: [
+      [2, 1],
+      [4, 1],
+      [6, 1],
+      [8, 1],
+      [3, 3],
+      [7, 3],
     ],
   },
 
@@ -90,6 +115,7 @@ const CHUNKS: ChunkDef[] = [
     name: "small_gap",
     width: 8,
     minDiff: 1,
+    role: "platforming",
     ground: [
       [0, 3],
       [5, 3],
@@ -97,6 +123,23 @@ const CHUNKS: ChunkDef[] = [
     platforms: [],
     enemies: [],
     coins: [[4, 2]],
+  },
+
+  // First enemy — single easy patrol on flat ground
+  {
+    name: "first_enemy",
+    width: 10,
+    minDiff: 1,
+    role: "combat",
+    ground: [[0, 10]],
+    platforms: [[3, 2, 4]],
+    enemies: [
+      { tile: 6, above: 1, type: "patrol", dist: 2 },
+    ],
+    coins: [
+      [4, 3],
+      [6, 3],
+    ],
   },
 
   // Step-up-and-down — platforms ascending then descending
@@ -146,6 +189,7 @@ const CHUNKS: ChunkDef[] = [
     name: "bridge",
     width: 12,
     minDiff: 2,
+    role: "platforming",
     ground: [
       [0, 2],
       [10, 2],
@@ -166,6 +210,7 @@ const CHUNKS: ChunkDef[] = [
     name: "enemy_alley",
     width: 10,
     minDiff: 2,
+    role: "combat",
     ground: [[0, 10]],
     platforms: [[2, 3, 6]],
     enemies: [
@@ -183,6 +228,7 @@ const CHUNKS: ChunkDef[] = [
     name: "tower",
     width: 8,
     minDiff: 2,
+    role: "platforming",
     ground: [[0, 8]],
     platforms: [
       [1, 2, 3],
@@ -214,11 +260,29 @@ const CHUNKS: ChunkDef[] = [
     ],
   },
 
+  // Safe haven — medium breather with coins
+  {
+    name: "safe_haven",
+    width: 8,
+    minDiff: 2,
+    role: "breather",
+    ground: [[0, 8]],
+    platforms: [[2, 2, 4]],
+    enemies: [],
+    coins: [
+      [1, 1],
+      [3, 3],
+      [5, 3],
+      [7, 1],
+    ],
+  },
+
   // Platform corridor — no ground, platforms only
   {
     name: "corridor",
     width: 14,
     minDiff: 2,
+    role: "platforming",
     ground: [
       [0, 2],
       [12, 2],
@@ -240,11 +304,32 @@ const CHUNKS: ChunkDef[] = [
   // HARD — Difficulty 3 (appear in level 3 only)
   // ═══════════════════════════════════════════════════
 
+  // Hard breather — coin bonanza before the hard stuff
+  {
+    name: "hard_breather",
+    width: 10,
+    minDiff: 3,
+    role: "breather",
+    ground: [[0, 10]],
+    platforms: [
+      [1, 2, 3],
+      [5, 3, 3],
+    ],
+    enemies: [],
+    coins: [
+      [2, 3],
+      [4, 1],
+      [6, 4],
+      [8, 1],
+    ],
+  },
+
   // Precision platforms — small platforms over a void
   {
     name: "precision",
     width: 14,
     minDiff: 3,
+    role: "platforming",
     ground: [
       [0, 2],
       [12, 2],
@@ -270,6 +355,7 @@ const CHUNKS: ChunkDef[] = [
     name: "gauntlet",
     width: 14,
     minDiff: 3,
+    role: "combat",
     ground: [[0, 14]],
     platforms: [
       [2, 3, 4],
@@ -343,6 +429,7 @@ const CHUNKS: ChunkDef[] = [
     name: "pit_run",
     width: 16,
     minDiff: 2,
+    role: "combat",
     ground: [
       [0, 2],
       [4, 2],
@@ -368,6 +455,7 @@ const CHUNKS: ChunkDef[] = [
     name: "sentry_towers",
     width: 12,
     minDiff: 2,
+    role: "combat",
     ground: [[0, 12]],
     platforms: [
       [2, 2, 2],
@@ -488,36 +576,56 @@ export class LevelGenerator {
     this.addGround(platforms, curX, 8, ts);
     curX += 8;
 
-    // ── Middle: random chunks from the pool ──
+    // ── Middle: paced chunks from the pool ──
     const pool = CHUNKS.filter((c) => c.minDiff <= difficulty);
+    const breathers = pool.filter((c) => c.role === "breather");
+    const challenges = pool.filter((c) => c.role !== "breather");
     let lastChunkName = "";
+    let sinceBreather = 0;
 
-    // Track midpoint for power-up placement
+    // Track positions for power-up/weapon placement
     const midChunk = Math.floor(chunkCount / 2);
+    const quarterChunk = Math.floor(chunkCount / 4);
+    const threeQuarterChunk = Math.floor(chunkCount * 3 / 4);
 
     for (let i = 0; i < chunkCount; i++) {
-      // Pick a chunk, avoiding immediate repeats
+      // Insert breather every 3-4 challenge chunks for good pacing
+      const needsBreather = sinceBreather >= 3 && breathers.length > 0;
+
       let chunk: ChunkDef;
       let tries = 0;
+      const sourcePool = needsBreather ? breathers : challenges.length > 0 ? challenges : pool;
+
       do {
-        chunk = pool[Math.floor(Math.random() * pool.length)];
+        chunk = sourcePool[Math.floor(Math.random() * sourcePool.length)];
         tries++;
       } while (chunk.name === lastChunkName && tries < 5);
       lastChunkName = chunk.name;
 
+      if (chunk.role === "breather") {
+        sinceBreather = 0;
+      } else {
+        sinceBreather++;
+      }
+
       this.buildChunk(chunk, curX, ts, difficulty, platforms, enemies, collectibles);
 
-      // Place 1 power-up per level at the midpoint chunk, on an elevated spot
+      // Place star power-up at midpoint
       if (i === midChunk) {
-        // Find the highest platform in this chunk, or use a spot 3 tiles above ground
         let puY = (this.GROUND_ROW - 3) * ts;
         if (chunk.platforms.length > 0) {
-          // Find highest platform (largest 'above' value)
           const highest = chunk.platforms.reduce((max, p) => p[1] > max[1] ? p : max, chunk.platforms[0]);
-          puY = (this.GROUND_ROW - highest[1] - 1) * ts; // 1 tile above the platform
+          puY = (this.GROUND_ROW - highest[1] - 1) * ts;
         }
         const puX = (curX + Math.floor(chunk.width / 2)) * ts;
         powerUps.push({ x: puX, y: puY, type: "star" });
+      }
+
+      // Place weapon pickups at 1/4 and 3/4 through the level
+      if (i === quarterChunk || i === threeQuarterChunk) {
+        const wpX = (curX + Math.floor(chunk.width / 2)) * ts;
+        const wpY = (this.GROUND_ROW - 2) * ts;
+        powerUps.push({ x: wpX, y: wpY, type: "weapon" });
       }
 
       curX += chunk.width;

@@ -53,6 +53,14 @@ export class PreloadScene extends Phaser.Scene {
       }
     );
 
+    // Listen for madlibs entries — store for weapon type derivation
+    EventBus.on(
+      "load-entries-data",
+      (entries: Record<string, string>) => {
+        this.registry.set("entries", entries);
+      }
+    );
+
     // Listen for game start signal from React
     EventBus.on("start-game", () => {
       this.scene.start("GameScene", { levelIndex: 0 });
@@ -145,6 +153,7 @@ export class PreloadScene extends Phaser.Scene {
   shutdown(): void {
     EventBus.off("load-generated-assets");
     EventBus.off("load-story-data");
+    EventBus.off("load-entries-data");
     EventBus.off("start-game");
   }
 }

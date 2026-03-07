@@ -18,10 +18,12 @@ export interface CollectiblePlacement {
   y: number;
 }
 
+export type WeaponType = "fireball" | "boomerang" | "wave";
+
 export interface PowerUpPlacement {
   x: number;
   y: number;
-  type: "star";
+  type: "star" | "weapon";
 }
 
 export interface LevelData {

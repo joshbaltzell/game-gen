@@ -20,6 +20,13 @@ export class TouchControls {
   private _jumpJustPressedFrame: boolean = false;
   private _prevJumpPressed: boolean = false;
 
+  // Fire button state
+  private fireButton: Phaser.GameObjects.Image | null = null;
+  private fireKey: Phaser.Input.Keyboard.Key | null = null;
+  private _firePressed: boolean = false;
+  private _fireJustPressedFrame: boolean = false;
+  private _prevFirePressed: boolean = false;
+
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
     this.isMobile = !scene.sys.game.device.os.desktop;
@@ -28,6 +35,9 @@ export class TouchControls {
       this.cursors = scene.input.keyboard.createCursorKeys();
       this.spaceKey = scene.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.SPACE
+      );
+      this.fireKey = scene.input.keyboard.addKey(
+        Phaser.Input.Keyboard.KeyCodes.X
       );
     }
 
@@ -76,6 +86,24 @@ export class TouchControls {
       this._jumpPressed = false;
     });
 
+    // Fire button (right side, above jump)
+    this.fireButton = this.scene.add
+      .image(width - 80, height - 200, "fire-button")
+      .setScrollFactor(0)
+      .setDepth(100)
+      .setInteractive()
+      .setAlpha(0.7);
+
+    this.fireButton.on("pointerdown", () => {
+      this._firePressed = true;
+    });
+    this.fireButton.on("pointerup", () => {
+      this._firePressed = false;
+    });
+    this.fireButton.on("pointerout", () => {
+      this._firePressed = false;
+    });
+
     // Handle joystick touch
     this.scene.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
       // Left half of screen = joystick
@@ -103,11 +131,15 @@ export class TouchControls {
       }
     });
 
-    // Update jump just-pressed tracking
+    // Update just-pressed tracking for jump and fire
     this.scene.events.on("update", () => {
       this._jumpJustPressedFrame =
         this._jumpPressed && !this._prevJumpPressed;
       this._prevJumpPressed = this._jumpPressed;
+
+      this._fireJustPressedFrame =
+        this._firePressed && !this._prevFirePressed;
+      this._prevFirePressed = this._firePressed;
     });
   }
 
@@ -164,5 +196,12 @@ export class TouchControls {
         ? Phaser.Input.Keyboard.JustDown(this.cursors.up)
         : false);
     return keyboardJump || this._jumpJustPressedFrame;
+  }
+
+  get fireJustPressed(): boolean {
+    const keyboardFire = this.fireKey
+      ? Phaser.Input.Keyboard.JustDown(this.fireKey)
+      : false;
+    return keyboardFire || this._fireJustPressedFrame;
   }
 }

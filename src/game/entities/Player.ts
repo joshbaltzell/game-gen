@@ -1,10 +1,35 @@
 import Phaser from "phaser";
 import type { TouchControls } from "../systems/TouchControls";
+import { Projectile } from "./Projectile";
+import type { WeaponType } from "@/types/game";
+
+const WEAPON_TYPES: WeaponType[] = ["fireball", "boomerang", "wave"];
+
+/** Derive weapon type from the player's heroWeapon text input */
+export function weaponTypeFromText(text: string): WeaponType {
+  const lower = text.toLowerCase();
+  // Melee-ish words → wave (short range spread)
+  if (/sword|blade|dagger|saber|axe|hammer|mace|glaive|machete|lance|spear/.test(lower)) {
+    return "wave";
+  }
+  // Ranged words → fireball (straight shot)
+  if (/bow|blaster|pistol|gun|cannon|dart|sling|trident/.test(lower)) {
+    return "fireball";
+  }
+  // Returning/magic words → boomerang
+  if (/boomerang|whip|staff|wand|vine/.test(lower)) {
+    return "boomerang";
+  }
+  // Default
+  return "fireball";
+}
 
 export class Player {
   public sprite: Phaser.Physics.Arcade.Sprite;
   public isInvulnerable: boolean = false;
   public isStarPowered: boolean = false;
+  public weaponType: WeaponType = "fireball";
+  public projectiles: Projectile[] = [];
   private scene: Phaser.Scene;
   private moveSpeed: number = 340;
   private jumpForce: number = -720;
@@ -23,6 +48,11 @@ export class Player {
   // Jump buffering — register jump input slightly before landing
   private jumpBufferTime: number = 100; // ms
   private jumpBufferTimer: number = 0;
+
+  // Weapon cooldown
+  private fireCooldown: number = 0;
+  private fireCooldownTime: number = 350; // ms between shots
+  private facingRight: boolean = true;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     this.scene = scene;
@@ -53,12 +83,14 @@ export class Player {
     if (controls.left) {
       body.setAccelerationX(-2200);
       this.sprite.setFlipX(true);
+      this.facingRight = false;
       if (onGround) {
         this.sprite.setTexture("hero-run");
       }
     } else if (controls.right) {
       body.setAccelerationX(2200);
       this.sprite.setFlipX(false);
+      this.facingRight = true;
       if (onGround) {
         this.sprite.setTexture("hero-run");
       }
@@ -126,6 +158,40 @@ export class Player {
     } else {
       this.sprite.setScale(1, 1);
     }
+
+    // ── Weapon fire ──
+    this.fireCooldown -= delta;
+    if (controls.fireJustPressed && this.fireCooldown <= 0) {
+      this.fire();
+      this.fireCooldown = this.fireCooldownTime;
+    }
+
+    // Clean up destroyed projectiles
+    this.projectiles = this.projectiles.filter((p) => p.sprite.active);
+  }
+
+  fire(): Projectile | null {
+    // Limit active projectiles
+    const maxActive = this.weaponType === "wave" ? 3 : 2;
+    if (this.projectiles.length >= maxActive) return null;
+
+    const dir = this.facingRight ? 1 : -1;
+    const offsetX = dir * 28;
+    const proj = new Projectile(
+      this.scene,
+      this.sprite.x + offsetX,
+      this.sprite.y,
+      dir,
+      this.weaponType,
+      this.sprite,
+    );
+    this.projectiles.push(proj);
+    return proj;
+  }
+
+  cycleWeapon(): void {
+    const idx = WEAPON_TYPES.indexOf(this.weaponType);
+    this.weaponType = WEAPON_TYPES[(idx + 1) % WEAPON_TYPES.length];
   }
 
   activateStar(scene: Phaser.Scene): void {

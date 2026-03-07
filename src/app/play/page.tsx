@@ -20,6 +20,7 @@ export default function PlayPage() {
   const [sceneReady, setSceneReady] = useState(false);
   const assets = useGameStore((s) => s.assets);
   const story = useGameStore((s) => s.story);
+  const entries = useGameStore((s) => s.entries);
   const assetsSentRef = useRef(false);
   const storySentRef = useRef(false);
 
@@ -56,6 +57,20 @@ export default function PlayPage() {
       return () => clearTimeout(timer);
     }
   }, [sceneReady, story]);
+
+  // Send madlibs entries for weapon type derivation
+  const entriesSentRef = useRef(false);
+  useEffect(() => {
+    if (!sceneReady) return;
+
+    if (entries && Object.keys(entries).length > 0 && !entriesSentRef.current) {
+      entriesSentRef.current = true;
+      const timer = setTimeout(() => {
+        EventBus.emit("load-entries-data", entries);
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [sceneReady, entries]);
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-[var(--background)]">

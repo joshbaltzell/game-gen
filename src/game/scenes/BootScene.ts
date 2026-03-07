@@ -206,5 +206,59 @@ export class BootScene extends Phaser.Scene {
     exitGfx.fillCircle(24, 24, 6);
     exitGfx.generateTexture("exit-portal", 48, 48);
     exitGfx.destroy();
+
+    // ── Fire button — orange accent ──
+    const fireGfx = this.add.graphics();
+    fireGfx.fillStyle(0xf4a261, 0.7);
+    fireGfx.fillCircle(30, 30, 30);
+    fireGfx.lineStyle(3, 0xffffff, 0.9);
+    fireGfx.strokeCircle(30, 30, 30);
+    // X symbol
+    fireGfx.lineStyle(4, 0xffffff, 1);
+    fireGfx.lineBetween(18, 18, 42, 42);
+    fireGfx.lineBetween(42, 18, 18, 42);
+    fireGfx.generateTexture("fire-button", 60, 60);
+    fireGfx.destroy();
+
+    // ── Projectile: fireball — orange/red ball ──
+    const fbGfx = this.add.graphics();
+    fbGfx.fillStyle(0xff6b35, 1);
+    fbGfx.fillCircle(8, 8, 8);
+    fbGfx.fillStyle(0xffdd00, 0.8);
+    fbGfx.fillCircle(6, 6, 4);
+    fbGfx.generateTexture("projectile-fireball", 16, 16);
+    fbGfx.destroy();
+
+    // ── Projectile: boomerang — cyan diamond ──
+    const bmGfx = this.add.graphics();
+    bmGfx.fillStyle(0x00d4ff, 1);
+    bmGfx.fillTriangle(8, 0, 16, 8, 8, 16);
+    bmGfx.fillTriangle(8, 0, 0, 8, 8, 16);
+    bmGfx.fillStyle(0xffffff, 0.6);
+    bmGfx.fillCircle(8, 8, 3);
+    bmGfx.generateTexture("projectile-boomerang", 16, 16);
+    bmGfx.destroy();
+
+    // ── Projectile: wave — wide teal arc ──
+    const wvGfx = this.add.graphics();
+    wvGfx.fillStyle(0x2ec4b6, 0.8);
+    wvGfx.fillEllipse(16, 10, 32, 20);
+    wvGfx.fillStyle(0xffffff, 0.4);
+    wvGfx.fillEllipse(14, 8, 20, 10);
+    wvGfx.generateTexture("projectile-wave", 32, 20);
+    wvGfx.destroy();
+
+    // ── Weapon pickup — cycling weapon box ──
+    const wpGfx = this.add.graphics();
+    wpGfx.fillStyle(0x293241, 1);
+    wpGfx.fillRoundedRect(0, 0, 28, 28, 4);
+    wpGfx.lineStyle(2, 0x00d4ff, 1);
+    wpGfx.strokeRoundedRect(0, 0, 28, 28, 4);
+    wpGfx.fillStyle(0xff6b35, 1);
+    wpGfx.fillCircle(14, 14, 6);
+    wpGfx.fillStyle(0xffffff, 0.8);
+    wpGfx.fillCircle(12, 11, 2);
+    wpGfx.generateTexture("weapon-pickup", 28, 28);
+    wpGfx.destroy();
   }
 }
