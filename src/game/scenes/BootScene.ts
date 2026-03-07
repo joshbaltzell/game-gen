@@ -248,6 +248,118 @@ export class BootScene extends Phaser.Scene {
     wvGfx.generateTexture("projectile-wave", 32, 20);
     wvGfx.destroy();
 
+    // ── Boss: Charger — red armored bull-like beast ──
+    const chargerGfx = this.add.graphics();
+    // Body
+    chargerGfx.fillStyle(0xc9184a, 1);
+    chargerGfx.fillRoundedRect(4, 10, 52, 38, 6);
+    // Armor plates
+    chargerGfx.fillStyle(0x8b0a30, 1);
+    chargerGfx.fillRect(8, 12, 44, 6);
+    chargerGfx.fillRect(8, 40, 44, 6);
+    // Horns
+    chargerGfx.fillStyle(0xffd700, 1);
+    chargerGfx.fillTriangle(4, 14, 0, 2, 12, 10);
+    chargerGfx.fillTriangle(48, 14, 56, 2, 44, 10);
+    // Eyes — angry red glow
+    chargerGfx.fillStyle(0xff0000, 1);
+    chargerGfx.fillRect(14, 20, 10, 8);
+    chargerGfx.fillRect(36, 20, 10, 8);
+    chargerGfx.fillStyle(0xffffff, 1);
+    chargerGfx.fillRect(16, 22, 4, 4);
+    chargerGfx.fillRect(38, 22, 4, 4);
+    // Mouth / grille
+    chargerGfx.fillStyle(0x0b132b, 1);
+    chargerGfx.fillRect(18, 34, 24, 6);
+    chargerGfx.generateTexture("boss-charger", 60, 52);
+    chargerGfx.destroy();
+
+    // ── Boss: Orbiter — purple crystal entity ──
+    const orbiterGfx = this.add.graphics();
+    // Outer glow
+    orbiterGfx.fillStyle(0x7b2cbf, 0.3);
+    orbiterGfx.fillCircle(28, 28, 28);
+    // Inner body
+    orbiterGfx.fillStyle(0x9d4edd, 1);
+    orbiterGfx.fillCircle(28, 28, 20);
+    // Crystal facets
+    orbiterGfx.fillStyle(0xc77dff, 0.7);
+    orbiterGfx.fillTriangle(28, 8, 18, 24, 38, 24);
+    // Eye — single glowing eye
+    orbiterGfx.fillStyle(0xff006e, 1);
+    orbiterGfx.fillCircle(28, 26, 7);
+    orbiterGfx.fillStyle(0xffffff, 1);
+    orbiterGfx.fillCircle(26, 24, 3);
+    // Floating fragments
+    orbiterGfx.fillStyle(0xc77dff, 0.8);
+    orbiterGfx.fillRect(6, 6, 6, 6);
+    orbiterGfx.fillRect(44, 6, 6, 6);
+    orbiterGfx.fillRect(6, 44, 6, 6);
+    orbiterGfx.fillRect(44, 44, 6, 6);
+    orbiterGfx.generateTexture("boss-orbiter", 56, 56);
+    orbiterGfx.destroy();
+
+    // ── Boss: Overlord — massive dark warlord with cape ──
+    const overlordGfx = this.add.graphics();
+    // Cape
+    overlordGfx.fillStyle(0x4a0e2e, 1);
+    overlordGfx.fillTriangle(4, 20, 32, 8, 60, 20);
+    overlordGfx.fillRect(6, 20, 52, 40);
+    // Body
+    overlordGfx.fillStyle(0x1a0a1e, 1);
+    overlordGfx.fillRoundedRect(10, 12, 44, 44, 6);
+    // Armor
+    overlordGfx.fillStyle(0xc9184a, 1);
+    overlordGfx.fillRect(14, 14, 36, 4);
+    overlordGfx.fillRect(14, 50, 36, 4);
+    // Crown — triple-pointed
+    overlordGfx.fillStyle(0xffd700, 1);
+    overlordGfx.fillRect(16, 4, 32, 10);
+    overlordGfx.fillTriangle(16, 4, 22, -6, 28, 4);
+    overlordGfx.fillTriangle(26, 4, 32, -8, 38, 4);
+    overlordGfx.fillTriangle(36, 4, 42, -6, 48, 4);
+    // Eyes — glowing purple
+    overlordGfx.fillStyle(0xff006e, 1);
+    overlordGfx.fillRect(18, 24, 10, 10);
+    overlordGfx.fillRect(36, 24, 10, 10);
+    overlordGfx.fillStyle(0xffffff, 1);
+    overlordGfx.fillRect(20, 26, 5, 5);
+    overlordGfx.fillRect(38, 26, 5, 5);
+    // Mouth — jagged
+    overlordGfx.fillStyle(0xff006e, 0.8);
+    overlordGfx.fillRect(22, 40, 20, 4);
+    overlordGfx.fillTriangle(22, 40, 26, 36, 30, 40);
+    overlordGfx.fillTriangle(34, 40, 38, 36, 42, 40);
+    overlordGfx.generateTexture("boss-overlord", 64, 64);
+    overlordGfx.destroy();
+
+    // ── Shield orb — for orbiter boss ──
+    const shieldGfx = this.add.graphics();
+    shieldGfx.fillStyle(0xc77dff, 0.8);
+    shieldGfx.fillCircle(12, 12, 12);
+    shieldGfx.fillStyle(0xffffff, 0.5);
+    shieldGfx.fillCircle(10, 9, 5);
+    shieldGfx.generateTexture("shield-orb", 24, 24);
+    shieldGfx.destroy();
+
+    // ── Shockwave — for overlord ground slam ──
+    const swGfx = this.add.graphics();
+    swGfx.fillStyle(0xff006e, 0.7);
+    swGfx.fillEllipse(24, 12, 48, 24);
+    swGfx.fillStyle(0xffffff, 0.3);
+    swGfx.fillEllipse(20, 8, 24, 12);
+    swGfx.generateTexture("shockwave", 48, 24);
+    swGfx.destroy();
+
+    // ── Boss projectile — for overlord phase 2 ──
+    const bpGfx = this.add.graphics();
+    bpGfx.fillStyle(0xff006e, 1);
+    bpGfx.fillCircle(10, 10, 10);
+    bpGfx.fillStyle(0xff4444, 0.7);
+    bpGfx.fillCircle(8, 8, 5);
+    bpGfx.generateTexture("boss-projectile", 20, 20);
+    bpGfx.destroy();
+
     // ── Weapon pickup — cycling weapon box ──
     const wpGfx = this.add.graphics();
     wpGfx.fillStyle(0x293241, 1);

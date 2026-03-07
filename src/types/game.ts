@@ -20,6 +20,14 @@ export interface CollectiblePlacement {
 
 export type WeaponType = "fireball" | "boomerang" | "wave";
 
+export type BossType = "charger" | "orbiter" | "overlord";
+
+export interface BossPlacement {
+  x: number;
+  y: number;
+  type: BossType;
+}
+
 export interface PowerUpPlacement {
   x: number;
   y: number;
@@ -36,6 +44,7 @@ export interface LevelData {
   powerUps: PowerUpPlacement[];
   playerStart: { x: number; y: number };
   exit: { x: number; y: number };
+  boss?: BossPlacement;
   backgroundKey: string;
   chapterIndex: number;
 }

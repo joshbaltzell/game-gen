@@ -5,6 +5,7 @@ import { PatrolEnemy } from "../entities/PatrolEnemy";
 import { FlyingEnemy } from "../entities/FlyingEnemy";
 import { Collectible } from "../entities/Collectible";
 import { PowerUp } from "../entities/PowerUp";
+import { Boss } from "../entities/Boss";
 import { TouchControls } from "../systems/TouchControls";
 import { LevelGenerator } from "../levels/LevelGenerator";
 import type { LevelData, WeaponType } from "@/types/game";
@@ -27,6 +28,12 @@ export class GameScene extends Phaser.Scene {
   private lives: number = 3;
   private isLevelComplete: boolean = false;
   private weaponLabel?: Phaser.GameObjects.Text;
+  private boss?: Boss;
+  private bossHealthBar?: Phaser.GameObjects.Graphics;
+  private bossHealthBg?: Phaser.GameObjects.Graphics;
+  private bossNameText?: Phaser.GameObjects.Text;
+  private bossDefeated: boolean = false;
+  private exitPortalLocked: boolean = false;
 
   constructor() {
     super("GameScene");
@@ -38,6 +45,8 @@ export class GameScene extends Phaser.Scene {
     this.lives = data.lives ?? this.lives;
     this.isLevelComplete = false;
     this.collectiblesFound = 0;
+    this.bossDefeated = false;
+    this.boss = undefined;
   }
 
   create(): void {
@@ -91,6 +100,14 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 1);
 
     this.physics.add.existing(this.exitPortal, true);
+
+    // Spawn boss if level has one
+    if (this.levelData.boss) {
+      this.spawnBoss();
+      // Lock exit until boss is defeated
+      this.exitPortalLocked = true;
+      this.exitPortal.setAlpha(0.3);
+    }
 
     // Collisions
     this.physics.add.collider(this.player.sprite, this.platforms);
@@ -192,6 +209,16 @@ export class GameScene extends Phaser.Scene {
     // Update weapon HUD
     if (this.weaponLabel) {
       this.weaponLabel.setText(this.getWeaponLabel());
+    }
+
+    // Boss fight logic
+    if (this.boss && !this.boss.isDead) {
+      this.updateBossFight();
+    }
+
+    // Update boss health bar
+    if (this.boss && this.bossHealthBar && !this.boss.isDead) {
+      this.drawBossHealthBar();
     }
 
     // Check if player fell off the world
@@ -340,6 +367,7 @@ export class GameScene extends Phaser.Scene {
 
   private onReachExit = (): void => {
     if (this.isLevelComplete) return;
+    if (this.exitPortalLocked) return; // Boss must be defeated first
     this.isLevelComplete = true;
 
     EventBus.emit("level-complete", {
@@ -455,6 +483,294 @@ export class GameScene extends Phaser.Scene {
         onComplete: () => particle.destroy(),
       });
     }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // Boss Fight System
+  // ═══════════════════════════════════════════════════════
+
+  private spawnBoss(): void {
+    const bossData = this.levelData.boss!;
+    const ts = this.levelData.tileSize;
+
+    // Calculate arena bounds from boss position
+    const arenaHalfWidth = bossData.type === "overlord" ? 12 * ts : 10 * ts;
+    const arenaLeft = bossData.x - arenaHalfWidth;
+    const arenaRight = bossData.x + arenaHalfWidth;
+    const arenaFloorY = LevelGenerator.GROUND_Y(this.levelData);
+
+    this.boss = new Boss(
+      this,
+      bossData.x,
+      bossData.y,
+      bossData.type,
+      arenaLeft,
+      arenaRight,
+      arenaFloorY,
+    );
+
+    // Collide boss with platforms
+    this.physics.add.collider(this.boss.sprite, this.platforms);
+
+    // Set up overlord platforms if applicable
+    if (bossData.type === "overlord") {
+      const overlordPlatforms = [
+        { x: bossData.x - 6 * ts, y: arenaFloorY - 3 * ts },
+        { x: bossData.x + 6 * ts, y: arenaFloorY - 3 * ts },
+        { x: bossData.x, y: arenaFloorY - 5 * ts },
+        { x: bossData.x - 4 * ts, y: arenaFloorY - 5 * ts },
+        { x: bossData.x + 4 * ts, y: arenaFloorY - 5 * ts },
+      ];
+      this.boss.setOverlordPlatforms(overlordPlatforms);
+    }
+
+    // Create boss health bar HUD
+    this.createBossHUD(bossData.type);
+  }
+
+  private createBossHUD(bossType: string): void {
+    const { width } = this.scale;
+    const bossNames: Record<string, string> = {
+      charger: "THE CHARGER",
+      orbiter: "THE ORBITER",
+      overlord: "THE OVERLORD",
+    };
+
+    this.bossNameText = this.add
+      .text(width / 2, 20, bossNames[bossType] ?? "BOSS", {
+        fontSize: "16px",
+        color: "#ff006e",
+        fontFamily: "monospace",
+        fontStyle: "bold",
+        backgroundColor: "#00000088",
+        padding: { x: 10, y: 4 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(200);
+
+    this.bossHealthBg = this.add.graphics().setScrollFactor(0).setDepth(199);
+    this.bossHealthBar = this.add.graphics().setScrollFactor(0).setDepth(200);
+
+    this.drawBossHealthBar();
+  }
+
+  private drawBossHealthBar(): void {
+    if (!this.boss || !this.bossHealthBar || !this.bossHealthBg) return;
+
+    const { width } = this.scale;
+    const barWidth = 200;
+    const barHeight = 10;
+    const barX = (width - barWidth) / 2;
+    const barY = 44;
+
+    const hpRatio = Math.max(0, this.boss.hp / this.boss.maxHp);
+
+    this.bossHealthBg.clear();
+    this.bossHealthBg.fillStyle(0x333333, 0.8);
+    this.bossHealthBg.fillRoundedRect(barX - 2, barY - 2, barWidth + 4, barHeight + 4, 3);
+
+    this.bossHealthBar.clear();
+    // Color transitions from green to yellow to red
+    let barColor = 0x00ff00;
+    if (hpRatio < 0.66) barColor = 0xffaa00;
+    if (hpRatio < 0.33) barColor = 0xff0000;
+
+    this.bossHealthBar.fillStyle(barColor, 1);
+    this.bossHealthBar.fillRoundedRect(barX, barY, barWidth * hpRatio, barHeight, 2);
+  }
+
+  private updateBossFight(): void {
+    if (!this.boss || this.boss.isDead) return;
+
+    const boss = this.boss;
+
+    // Charger: orient toward player when not charging
+    if (boss.bossType === "charger") {
+      boss.facePlayer(this.player.sprite.x);
+    }
+
+    // Player-boss collision (stomp or damage)
+    if (
+      this.player.sprite.active &&
+      !this.player.isInvulnerable &&
+      this.checkOverlap(this.player.sprite, boss.sprite)
+    ) {
+      this.handleBossPlayerCollision();
+    }
+
+    // Projectile-boss collision
+    for (const proj of this.player.projectiles) {
+      if (!proj.sprite.active) continue;
+
+      // Check if projectile hits shield orbs first (orbiter)
+      if (boss.bossType === "orbiter") {
+        let blocked = false;
+        for (const orb of boss.shieldOrbs) {
+          if (orb.active && this.checkOverlap(proj.sprite, orb)) {
+            if (!proj.isPiercing) {
+              proj.sprite.destroy();
+            }
+            blocked = true;
+            break;
+          }
+        }
+        if (blocked) continue;
+      }
+
+      // Hit boss
+      if (this.checkOverlap(proj.sprite, boss.sprite)) {
+        const killed = boss.takeDamage(this);
+        this.spawnParticles(boss.sprite.x, boss.sprite.y, 0xff006e, 10);
+        this.screenShake(5, 120);
+
+        if (!proj.isPiercing) {
+          proj.sprite.destroy();
+        }
+
+        if (killed) {
+          this.onBossDefeated();
+        }
+      }
+    }
+
+    // Overlord shockwave hits player
+    for (const sw of boss.shockwaves) {
+      if (
+        sw.active &&
+        this.player.sprite.active &&
+        !this.player.isInvulnerable &&
+        this.checkOverlap(this.player.sprite, sw)
+      ) {
+        this.onPlayerHit();
+        sw.destroy();
+      }
+    }
+
+    // Overlord projectile hits player
+    for (const bp of boss.bossProjectiles) {
+      if (
+        bp.active &&
+        this.player.sprite.active &&
+        !this.player.isInvulnerable &&
+        this.checkOverlap(this.player.sprite, bp)
+      ) {
+        this.onPlayerHit();
+        bp.destroy();
+      }
+    }
+  }
+
+  private handleBossPlayerCollision(): void {
+    if (!this.boss) return;
+
+    // Star power destroys boss hit
+    if (this.player.isStarPowered) {
+      const killed = this.boss.takeDamage(this);
+      this.spawnParticles(this.boss.sprite.x, this.boss.sprite.y, 0xffd700, 12);
+      this.screenShake(6, 150);
+      if (killed) this.onBossDefeated();
+      return;
+    }
+
+    const playerBody = this.player.sprite.body as Phaser.Physics.Arcade.Body;
+    const bossSprite = this.boss.sprite;
+
+    // Stomp detection — player falling onto boss from above
+    const isStomping =
+      playerBody.velocity.y > 0 &&
+      this.player.sprite.y < bossSprite.y - bossSprite.displayHeight * 0.3;
+
+    if (isStomping) {
+      // Bounce player
+      playerBody.setVelocityY(-550);
+
+      const killed = this.boss.takeDamage(this);
+      this.spawnParticles(bossSprite.x, bossSprite.y, 0xff006e, 10);
+      this.screenShake(5, 120);
+
+      if (killed) {
+        this.onBossDefeated();
+      }
+    } else {
+      // Player takes damage
+      this.onPlayerHit();
+    }
+  }
+
+  private onBossDefeated(): void {
+    this.bossDefeated = true;
+    this.exitPortalLocked = false;
+
+    // Show exit portal
+    this.exitPortal.setAlpha(1);
+    this.tweens.add({
+      targets: this.exitPortal,
+      scaleX: { from: 0.5, to: 1.2 },
+      scaleY: { from: 0.5, to: 1.2 },
+      duration: 400,
+      yoyo: true,
+      repeat: 1,
+    });
+
+    // Big celebration particles
+    if (this.boss) {
+      for (let i = 0; i < 3; i++) {
+        this.time.delayedCall(i * 200, () => {
+          if (this.boss) {
+            this.spawnParticles(
+              this.boss.sprite.x + (Math.random() - 0.5) * 60,
+              this.boss.sprite.y + (Math.random() - 0.5) * 40,
+              [0xff006e, 0xffd700, 0x00d4ff, 0x2ec4b6][i % 4],
+              12,
+            );
+          }
+        });
+      }
+    }
+    this.screenShake(10, 300);
+
+    // Remove boss HUD
+    this.time.delayedCall(800, () => {
+      if (this.bossNameText) {
+        this.tweens.add({
+          targets: this.bossNameText,
+          alpha: 0,
+          duration: 500,
+        });
+      }
+      if (this.bossHealthBg) {
+        this.tweens.add({
+          targets: this.bossHealthBg,
+          alpha: 0,
+          duration: 500,
+        });
+      }
+      if (this.bossHealthBar) {
+        this.tweens.add({
+          targets: this.bossHealthBar,
+          alpha: 0,
+          duration: 500,
+        });
+      }
+    });
+
+    this.score += 1000;
+    EventBus.emit("boss-defeated", {
+      boss: this.boss?.bossType,
+      score: this.score,
+      level: this.levelIndex + 1,
+    });
+  }
+
+  private checkOverlap(
+    a: Phaser.Physics.Arcade.Sprite,
+    b: Phaser.Physics.Arcade.Sprite,
+  ): boolean {
+    if (!a.active || !b.active) return false;
+    const boundsA = a.getBounds();
+    const boundsB = b.getBounds();
+    return Phaser.Geom.Intersects.RectangleToRectangle(boundsA, boundsB);
   }
 
   private getWeaponLabel(): string {

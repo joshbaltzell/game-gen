@@ -4,6 +4,8 @@ import type {
   EnemyPlacement,
   CollectiblePlacement,
   PowerUpPlacement,
+  BossPlacement,
+  BossType,
 } from "@/types/game";
 
 // ---------------------------------------------------------------------------
@@ -559,6 +561,11 @@ export class LevelGenerator {
   private static readonly GROUND_ROW = G;
   private static readonly ROWS = 12;
 
+  /** Get the ground Y position in pixels for a given level */
+  static GROUND_Y(level: LevelData): number {
+    return this.GROUND_ROW * level.tileSize;
+  }
+
   static generate(levelIndex: number): LevelData {
     const difficulty = Math.min(levelIndex + 1, 3); // 1, 2, 3
     const ts = this.TILE;
@@ -631,7 +638,22 @@ export class LevelGenerator {
       curX += chunk.width;
     }
 
-    // ── Exit: flat ground with portal ──
+    // ── Boss arena at the end of each level ──
+    const bossTypes: BossType[] = ["charger", "orbiter", "overlord"];
+    const bossType = bossTypes[Math.min(levelIndex, 2)];
+    const arenaStart = curX;
+
+    // Build a boss arena appropriate for the boss type
+    const arenaWidth = this.buildBossArena(bossType, curX, ts, platforms);
+    curX += arenaWidth;
+
+    const boss: BossPlacement = {
+      x: (arenaStart + Math.floor(arenaWidth / 2)) * ts,
+      y: (this.GROUND_ROW - 2) * ts,
+      type: bossType,
+    };
+
+    // ── Exit: flat ground with portal (after boss arena) ──
     this.addGround(platforms, curX, 8, ts);
     const totalWidth = curX + 8;
 
@@ -651,6 +673,7 @@ export class LevelGenerator {
         x: (totalWidth - 3) * ts,
         y: this.GROUND_ROW * ts,
       },
+      boss,
       backgroundKey: `bg-level-${levelIndex}`,
       chapterIndex: levelIndex,
     };
@@ -712,6 +735,119 @@ export class LevelGenerator {
         x: (startX + localX) * ts,
         y: (this.GROUND_ROW - aboveGround) * ts,
       });
+    }
+  }
+
+  /** Build a boss arena and return its width in tiles */
+  private static buildBossArena(
+    bossType: BossType,
+    startX: number,
+    ts: number,
+    platforms: PlatformData[],
+  ): number {
+    switch (bossType) {
+      case "charger": {
+        // Flat arena with walls — charger bounces between them
+        const arenaW = 20;
+        this.addGround(platforms, startX, arenaW, ts);
+        // Left wall (2 tiles tall)
+        platforms.push({
+          x: startX * ts,
+          y: (this.GROUND_ROW - 2) * ts,
+          width: ts,
+          height: 2 * ts,
+          type: "floating",
+        });
+        // Right wall (2 tiles tall)
+        platforms.push({
+          x: (startX + arenaW - 1) * ts,
+          y: (this.GROUND_ROW - 2) * ts,
+          width: ts,
+          height: 2 * ts,
+          type: "floating",
+        });
+        return arenaW;
+      }
+
+      case "orbiter": {
+        // Open arena with ground and a few low platforms for maneuvering
+        const arenaW = 22;
+        this.addGround(platforms, startX, arenaW, ts);
+        // Left platform
+        platforms.push({
+          x: (startX + 3) * ts,
+          y: (this.GROUND_ROW - 3) * ts,
+          width: 4 * ts,
+          height: ts,
+          type: "floating",
+        });
+        // Right platform
+        platforms.push({
+          x: (startX + 15) * ts,
+          y: (this.GROUND_ROW - 3) * ts,
+          width: 4 * ts,
+          height: ts,
+          type: "floating",
+        });
+        // High center platform (for stomping on orbiter)
+        platforms.push({
+          x: (startX + 9) * ts,
+          y: (this.GROUND_ROW - 6) * ts,
+          width: 4 * ts,
+          height: ts,
+          type: "floating",
+        });
+        return arenaW;
+      }
+
+      case "overlord": {
+        // Multi-level arena with platforms for overlord to jump between
+        const arenaW = 24;
+        this.addGround(platforms, startX, arenaW, ts);
+        // Left low platform
+        platforms.push({
+          x: (startX + 3) * ts,
+          y: (this.GROUND_ROW - 3) * ts,
+          width: 4 * ts,
+          height: ts,
+          type: "floating",
+        });
+        // Right low platform
+        platforms.push({
+          x: (startX + 17) * ts,
+          y: (this.GROUND_ROW - 3) * ts,
+          width: 4 * ts,
+          height: ts,
+          type: "floating",
+        });
+        // Center high platform
+        platforms.push({
+          x: (startX + 9) * ts,
+          y: (this.GROUND_ROW - 5) * ts,
+          width: 6 * ts,
+          height: ts,
+          type: "floating",
+        });
+        // Extra flanking platforms at mid height
+        platforms.push({
+          x: (startX + 5) * ts,
+          y: (this.GROUND_ROW - 5) * ts,
+          width: 3 * ts,
+          height: ts,
+          type: "floating",
+        });
+        platforms.push({
+          x: (startX + 16) * ts,
+          y: (this.GROUND_ROW - 5) * ts,
+          width: 3 * ts,
+          height: ts,
+          type: "floating",
+        });
+        return arenaW;
+      }
+
+      default:
+        return 16;
     }
   }
 
