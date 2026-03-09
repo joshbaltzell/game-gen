@@ -15,6 +15,12 @@ export class GameOverScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Stop all audio from previous scene
+    try {
+      const audio = this.registry.get("audioManager");
+      if (audio) audio.stopMusic();
+    } catch { /* ignore */ }
+
     const { width, height } = this.scale;
 
     // Background

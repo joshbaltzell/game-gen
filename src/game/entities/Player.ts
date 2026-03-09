@@ -51,9 +51,13 @@ export class Player {
   private jumpBufferTime: number = 100; // ms
   private jumpBufferTimer: number = 0;
 
-  // Weapon cooldown
+  // Weapon cooldown — varies per weapon type
   private fireCooldown: number = 0;
-  private fireCooldownTime: number = 350; // ms between shots
+  private readonly cooldownByWeapon: Record<string, number> = {
+    wave: 400,     // melee rhythm
+    fireball: 300, // rapid fire
+    boomerang: 600, // wait for return
+  };
   private facingRight: boolean = true;
 
   // Animation state
@@ -131,6 +135,10 @@ export class Player {
 
     if (wantsJump && this.canJump && canJumpNow) {
       body.setVelocityY(this.jumpForce);
+      try {
+        const audio = this.scene.registry.get("audioManager");
+        if (audio) audio.play("sfx-jump");
+      } catch { /* ignore */ }
       this.canJump = false;
       this.jumpHeld = true;
       this.jumpHoldTimer = 0;
@@ -170,7 +178,7 @@ export class Player {
     this.fireCooldown -= delta;
     if (controls.fireJustPressed && this.fireCooldown <= 0) {
       this.fire();
-      this.fireCooldown = this.fireCooldownTime;
+      this.fireCooldown = this.cooldownByWeapon[this.weaponType] ?? 350;
       this.attackAnimTimer = 200; // show attack anim for 200ms
     }
 
@@ -193,16 +201,35 @@ export class Player {
   }
 
   fire(): Projectile | null {
-    // Limit active projectiles
-    const maxActive = this.weaponType === "wave" ? 3 : 2;
+    // Limit active projectiles per weapon type
+    const maxActive = this.weaponType === "wave" ? 1 : this.weaponType === "boomerang" ? 1 : 3;
     if (this.projectiles.length >= maxActive) return null;
 
+    try {
+      const audio = this.scene.registry.get("audioManager");
+      if (audio) audio.play("sfx-weapon-fire");
+    } catch { /* ignore */ }
+
     const dir = this.facingRight ? 1 : -1;
-    const offsetX = dir * 28;
+
+    // Position depends on weapon type
+    let spawnX: number;
+    let spawnY: number;
+
+    if (this.weaponType === "wave") {
+      // Blade swing: spawn at player position (follows player)
+      spawnX = this.sprite.x;
+      spawnY = this.sprite.y;
+    } else {
+      // Ranged weapons: spawn offset in front of player
+      spawnX = this.sprite.x + dir * 28;
+      spawnY = this.sprite.y;
+    }
+
     const proj = new Projectile(
       this.scene,
-      this.sprite.x + offsetX,
-      this.sprite.y,
+      spawnX,
+      spawnY,
       dir,
       this.weaponType,
       this.sprite,

@@ -13,8 +13,13 @@ export class PreloadScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
+    const isDevMode = typeof window !== "undefined" &&
+      (window.location.pathname === "/dev" ||
+       (window as Record<string, unknown>).__DEV_MODE__);
+
     this.readyText = this.add
-      .text(width / 2, height / 2 - 20, "Loading assets...", {
+      .text(width / 2, height / 2 - 20,
+        isDevMode ? "Click to Start" : "Loading assets...", {
         fontSize: "24px",
         color: "#00d4ff",
         fontFamily: "monospace",
@@ -22,7 +27,8 @@ export class PreloadScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.tapText = this.add
-      .text(width / 2, height / 2 + 20, "Waiting for AI art...", {
+      .text(width / 2, height / 2 + 20,
+        isDevMode ? "Dev mode — placeholder textures" : "Waiting for AI art...", {
         fontSize: "14px",
         color: "#888888",
         fontFamily: "monospace",
@@ -81,52 +87,100 @@ export class PreloadScene extends Phaser.Scene {
         this.scene.start("GameScene", { levelIndex: 0 });
       }
     });
+
+    // Dev mode: auto-start with placeholders when loaded from /dev
+    if (typeof window !== "undefined" &&
+        (window.location.pathname === "/dev" ||
+         (window as Record<string, unknown>).__DEV_MODE__)) {
+      this.registry.set("entries", { heroWeapon: "fireball", heroName: "Dev Hero" });
+      // Use setTimeout to bypass potential Phaser timer issues
+      const scene = this;
+      setTimeout(() => {
+        scene.scene.start("GameScene", { levelIndex: 0 });
+      }, 500);
+    }
   }
 
+  /**
+   * Hero animation frames that all need to be replaced when we get an AI
+   * hero-idle image. Using the same texture for every frame loses animation
+   * variety but ensures the AI art is always visible.
+   */
+  private static readonly HERO_FRAME_KEYS = [
+    "hero-idle", "hero-idle-0", "hero-idle-1", "hero-idle-2",
+    "hero-run", "hero-run-0", "hero-run-1", "hero-run-2", "hero-run-3",
+    "hero-jump-0", "hero-fall-0", "hero-turn-0",
+    "hero-attack-0", "hero-attack-1",
+    "hero-celebrate-0", "hero-celebrate-1", "hero-celebrate-2",
+  ];
+
+  /**
+   * Load AI-generated assets, replacing placeholders.
+   *
+   * Strategy: expand each AI asset into ALL the Phaser texture keys it
+   * needs to fill. For `hero-idle` that means every animation frame key.
+   * For everything else it's a 1:1 mapping. Each expanded key gets its
+   * own `addBase64` call so Phaser treats them as independent textures.
+   *
+   * We track how many individual texture keys have finished loading and
+   * auto-start the game once all are done.
+   */
   private loadGeneratedAssets(assets: Record<string, string>): void {
-    const expectedKeys = new Set<string>();
+    // Build flat list: [targetKey, dataUri] for every texture to load
+    const pending = new Map<string, string>(); // targetKey → dataUri
 
     Object.entries(assets).forEach(([key, base64]) => {
-      if (base64 && typeof base64 === "string") {
-        expectedKeys.add(key);
+      if (!base64 || typeof base64 === "string" && base64.length === 0) return;
+      const dataUri = `data:image/png;base64,${base64}`;
 
-        // Remove the placeholder texture created by BootScene so we can
-        // replace it with the AI-generated version without collision
-        if (this.textures.exists(key)) {
-          this.textures.remove(key);
+      if (key === "hero-idle") {
+        // Replace every hero animation frame with the AI image
+        for (const frameKey of PreloadScene.HERO_FRAME_KEYS) {
+          pending.set(frameKey, dataUri);
         }
-
-        this.textures.addBase64(key, `data:image/png;base64,${base64}`);
+      } else {
+        pending.set(key, dataUri);
       }
     });
 
-    if (expectedKeys.size === 0) {
+    if (pending.size === 0) {
       this.autoStartGame();
       return;
     }
 
     let loaded = 0;
-    const total = expectedKeys.size;
+    const total = pending.size;
 
-    // addBase64 is async — fires "addtexture" when each image finishes loading
     const onTextureAdded = (addedKey: string) => {
-      if (expectedKeys.has(addedKey)) {
-        loaded++;
-        if (this.tapText) {
-          this.tapText.setText(`Loaded ${loaded} / ${total}...`);
-        }
-        if (loaded >= total) {
-          this.textures.off("addtexture", onTextureAdded);
-          this.assetsLoaded = true;
-          EventBus.emit("assets-loaded", { loaded, total });
-          this.autoStartGame();
-        }
+      if (!pending.has(addedKey)) return;
+
+      loaded++;
+
+      if (this.tapText) {
+        this.tapText.setText(`Loaded ${loaded} / ${total}...`);
+      }
+
+      if (loaded >= total) {
+        this.textures.off("addtexture", onTextureAdded);
+        this.assetsLoaded = true;
+        EventBus.emit("assets-loaded", { loaded, total });
+        this.autoStartGame();
       }
     };
 
     this.textures.on("addtexture", onTextureAdded);
 
-    // Safety timeout — don't wait forever (15 seconds)
+    // Remove placeholders and load AI textures into the same keys
+    for (const [targetKey, dataUri] of pending) {
+      if (this.textures.exists(targetKey)) {
+        this.textures.remove(targetKey);
+      }
+      this.textures.addBase64(targetKey, dataUri);
+    }
+
+    // Safety timeout — if some textures fail to decode, start anyway
+    // (placeholders were already removed so missing textures show Phaser's
+    //  default missing-texture checkerboard — still better than hanging)
     this.time.delayedCall(15000, () => {
       if (!this.assetsLoaded) {
         this.assetsLoaded = true;

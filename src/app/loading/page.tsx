@@ -1,19 +1,14 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback } from "react";
+import { Suspense, useEffect, useRef, useState, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useGameStore } from "@/stores/gameStore";
 import { getThemeById } from "@/data/themes";
 import {
   buildHeroIdlePrompt,
-  buildHeroRunPrompt,
-  buildVillainPrompt,
   buildEnemyPrompt,
-  buildCollectiblePrompt,
   buildBackgroundPrompt,
   buildPlatformTilesetPrompt,
-  buildChapterIllustrationPrompt,
-  buildPowerUpPrompt,
 } from "@/lib/imageGenerator";
 import type { StoryData } from "@/types/story";
 import type { PipelineStatus, StepStatus } from "@/types/assets";
@@ -46,6 +41,10 @@ function buildImageSteps(
   story: StoryData,
   entries: Record<string, string>
 ): GenerationStep[] {
+  // Minimal set: hero, enemy, background, tileset = 4 API calls
+  // Skipped: villain (boss textures are separate placeholders, "villain" key unused in gameplay),
+  //          collectible (placeholder coin looks great), hero-run, enemy-b, power-up,
+  //          chapter illustrations, extra backgrounds
   return [
     {
       id: "hero-idle",
@@ -55,30 +54,6 @@ function buildImageSteps(
       status: "pending",
       preview: null,
       prompt: buildHeroIdlePrompt(theme, story, entries),
-      size: "1024x1024",
-      quality: "medium",
-      background: "transparent",
-    },
-    {
-      id: "hero-run",
-      label: "Hero running pose",
-      icon: "🏃",
-      phaserKey: "hero-run",
-      status: "pending",
-      preview: null,
-      prompt: buildHeroRunPrompt(theme, story, entries),
-      size: "1024x1024",
-      quality: "medium",
-      background: "transparent",
-    },
-    {
-      id: "villain",
-      label: "Creating the villain",
-      icon: "😈",
-      phaserKey: "villain",
-      status: "pending",
-      preview: null,
-      prompt: buildVillainPrompt(theme, story, entries),
       size: "1024x1024",
       quality: "medium",
       background: "transparent",
@@ -96,65 +71,17 @@ function buildImageSteps(
       background: "transparent",
     },
     {
-      id: "enemy-b",
-      label: "More enemies",
-      icon: "👹",
-      phaserKey: "enemy-b",
-      status: "pending",
-      preview: null,
-      prompt: buildEnemyPrompt(theme, story.chapters[1] || story.chapters[0]),
-      size: "1024x1024",
-      quality: "medium",
-      background: "transparent",
-    },
-    {
-      id: "collectible",
-      label: "Crafting collectibles",
-      icon: "✨",
-      phaserKey: "collectible",
-      status: "pending",
-      preview: null,
-      prompt: buildCollectiblePrompt(theme, entries),
-      size: "1024x1024",
-      quality: "low",
-      background: "transparent",
-    },
-    {
-      id: "power-up",
-      label: "Creating power star",
-      icon: "⭐",
-      phaserKey: "power-up",
-      status: "pending",
-      preview: null,
-      prompt: buildPowerUpPrompt(theme),
-      size: "1024x1024",
-      quality: "medium",
-      background: "transparent",
-    },
-    ...story.chapters.map((chapter, i) => ({
-      id: `bg-level-${i}`,
-      label: `Painting world ${i + 1}`,
+      id: "bg-level-0",
+      label: "Painting the world",
       icon: "🎨",
-      phaserKey: `bg-level-${i}`,
-      status: "pending" as StepStatus,
+      phaserKey: "bg-level-0",
+      status: "pending",
       preview: null,
-      prompt: buildBackgroundPrompt(theme, chapter),
-      size: "1536x1024" as string,
-      quality: "low" as string,
-      background: "opaque" as string,
-    })),
-    ...story.chapters.map((chapter, i) => ({
-      id: `chapter-illustration-${i}`,
-      label: `Chapter ${i + 1} illustration`,
-      icon: "🖼️",
-      phaserKey: `chapter-illustration-${i}`,
-      status: "pending" as StepStatus,
-      preview: null,
-      prompt: buildChapterIllustrationPrompt(theme, chapter),
-      size: "1536x1024" as string,
-      quality: "medium" as string,
-      background: "opaque" as string,
-    })),
+      prompt: buildBackgroundPrompt(theme, story.chapters[0]),
+      size: "1536x1024",
+      quality: "low",
+      background: "opaque",
+    },
     {
       id: "platform-tile-0",
       label: "Building platforms",
@@ -221,6 +148,7 @@ function LoadingPageInner() {
   const [error, setError] = useState<string | null>(null);
   const [debugLog, setDebugLog] = useState<DebugEntry[]>([]);
   const [debugVisible, setDebugVisible] = useState(showDebug);
+  const startedRef = useRef(false);
 
   const addDebug = useCallback((step: string, message: string, level: DebugEntry["level"], duration?: number) => {
     setDebugLog((prev) => [...prev, { timestamp: Date.now(), step, message, level, duration }]);
@@ -241,7 +169,8 @@ function LoadingPageInner() {
       return;
     }
 
-    if (status !== "idle") return;
+    if (startedRef.current) return;
+    startedRef.current = true;
     setStatus("generating");
 
     const theme = getThemeById(themeId);
@@ -275,53 +204,36 @@ function LoadingPageInner() {
         setImageSteps(steps);
         addDebug("pipeline", `${steps.length} images queued for generation`, "info");
 
-        // Step 3: Generate images progressively in batches of 3
+        // Step 3: Generate images one at a time to stay under rate limits
         const assets: Record<string, string> = {};
 
-        for (let i = 0; i < steps.length; i += 3) {
-          const batch = steps.slice(i, i + 3);
+        for (const step of steps) {
+          updateStep(step.id, { status: "loading" });
+          addDebug(step.id, `Generating ${step.label}...`, "info");
 
-          // Mark batch as loading
-          for (const step of batch) {
-            updateStep(step.id, { status: "loading" });
-            addDebug(step.id, `Generating ${step.label}...`, "info");
-          }
+          const startTime = Date.now();
+          try {
+            const result = await generateSingleImage(
+              step.prompt!,
+              step.size!,
+              step.quality!,
+              step.background!
+            );
+            const elapsed = Date.now() - startTime;
 
-          // Generate batch in parallel
-          const startTimes = batch.map(() => Date.now());
-          const results = await Promise.allSettled(
-            batch.map(async (step) => {
-              const result = await generateSingleImage(
-                step.prompt!,
-                step.size!,
-                step.quality!,
-                step.background!
-              );
-              return { id: step.id, phaserKey: step.phaserKey, ...result };
-            })
-          );
-
-          // Process results
-          for (let j = 0; j < results.length; j++) {
-            const result = results[j];
-            const step = batch[j];
-            const elapsed = Date.now() - startTimes[j];
-
-            if (result.status === "fulfilled") {
-              const val = result.value;
-              if (val.image) {
-                assets[val.phaserKey] = val.image;
-                updateStep(val.id, { status: "complete", preview: val.image });
-                addDebug(val.id, `${step.label} complete`, "success", elapsed);
-              } else {
-                updateStep(val.id, { status: "error", errorMessage: val.error });
-                addDebug(val.id, `Failed: ${val.error}`, "error", elapsed);
-              }
+            if (result.image) {
+              assets[step.phaserKey] = result.image;
+              updateStep(step.id, { status: "complete", preview: result.image });
+              addDebug(step.id, `${step.label} complete`, "success", elapsed);
             } else {
-              const reason = result.reason instanceof Error ? result.reason.message : "Unknown error";
-              updateStep(step.id, { status: "error", errorMessage: reason });
-              addDebug(step.id, `Failed: ${reason}`, "error", elapsed);
+              updateStep(step.id, { status: "error", errorMessage: result.error });
+              addDebug(step.id, `Failed: ${result.error}`, "error", elapsed);
             }
+          } catch (err) {
+            const elapsed = Date.now() - startTime;
+            const reason = err instanceof Error ? err.message : "Unknown error";
+            updateStep(step.id, { status: "error", errorMessage: reason });
+            addDebug(step.id, `Failed: ${reason}`, "error", elapsed);
           }
         }
 
@@ -343,7 +255,8 @@ function LoadingPageInner() {
         setStatus("error");
       }
     })();
-  }, [themeId, entries, status, router, setStory, setAssets, setGameStatus, updateStep, addDebug]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeId, entries, router, setStory, setAssets, setGameStatus, updateStep, addDebug]);
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-[var(--background)] overflow-y-auto">

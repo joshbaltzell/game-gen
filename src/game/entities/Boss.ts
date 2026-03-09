@@ -44,6 +44,7 @@ export class Boss {
   private windupDuration: number = 600;
   private isCharging: boolean = false;
   private isWindingUp: boolean = false;
+  private shakeCooldown: number = 0;
 
   // Orbiter state
   private orbitAngle: number = 0;
@@ -86,7 +87,7 @@ export class Boss {
     switch (bossType) {
       case "charger":
         this.hp = this.maxHp = 3;
-        this.sprite.setScale(1.4);
+        this.sprite.setScale(1.0);
         body.setSize(this.sprite.width * 0.8, this.sprite.height * 0.85);
         body.setAllowGravity(true);
         body.setBounce(0);
@@ -95,7 +96,7 @@ export class Boss {
 
       case "orbiter":
         this.hp = this.maxHp = 4;
-        this.sprite.setScale(1.3);
+        this.sprite.setScale(1.0);
         body.setSize(this.sprite.width * 0.7, this.sprite.height * 0.7);
         body.setAllowGravity(false);
         body.setImmovable(true);
@@ -105,7 +106,7 @@ export class Boss {
 
       case "overlord":
         this.hp = this.maxHp = 6;
-        this.sprite.setScale(1.5);
+        this.sprite.setScale(1.1);
         body.setSize(this.sprite.width * 0.75, this.sprite.height * 0.85);
         body.setAllowGravity(true);
         body.setBounce(0);
@@ -196,8 +197,8 @@ export class Boss {
     // Death animation: flash and scale up then explode
     scene.tweens.add({
       targets: this.sprite,
-      scaleX: 2.5,
-      scaleY: 2.5,
+      scaleX: 1.5,
+      scaleY: 1.5,
       alpha: 0,
       duration: 600,
       ease: "Power2",
@@ -229,6 +230,8 @@ export class Boss {
 
   private updateCharger(delta: number): void {
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+
+    if (this.shakeCooldown > 0) this.shakeCooldown -= delta;
 
     if (this.isStunned) {
       this.stunTimer += delta;
@@ -283,7 +286,14 @@ export class Boss {
         this.isStunned = true;
         this.stunTimer = 0;
         body.setVelocityX(0);
-        this.scene.cameras.main.shake(200, 0.008);
+        try {
+          const audio = this.scene.registry.get("audioManager");
+          if (audio) audio.play("sfx-enemy-hit");
+        } catch { /* ignore */ }
+        if (this.shakeCooldown <= 0) {
+          this.scene.cameras.main.shake(200, 0.008);
+          this.shakeCooldown = 1000;
+        }
       }
     } else {
       // Idle — start winding up

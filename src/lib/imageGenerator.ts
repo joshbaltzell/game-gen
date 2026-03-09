@@ -75,7 +75,7 @@ export function buildBackgroundPrompt(
 }
 
 export function buildPlatformTilesetPrompt(theme: Theme): string {
-  return `${PIXEL_ART_PREFIX}, ${theme.artDirection}, game tileset showing 4 platform tiles in a row: ground with grass top, solid ground block, floating platform piece, special decorated block. Each tile is a square, arranged horizontally in one row. Flat magenta (#FF00FF) background for easy transparency keying, clean grid layout`;
+  return `${PIXEL_ART_PREFIX}, ${theme.artDirection}, single seamless platform tile for a 2D platformer game, square format, top surface with grass or stone edge detail, solid fill below, tileable horizontally, flat solid colored background, no shadow, isolated single square game tile`;
 }
 
 export function buildChapterIllustrationPrompt(

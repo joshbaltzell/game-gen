@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { AudioManager } from "../systems/AudioManager";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -34,7 +35,18 @@ export class BootScene extends Phaser.Scene {
   create(): void {
     this.createPlaceholderTextures();
     this.createHeroAnimations();
-    this.scene.start("PreloadScene");
+
+    // Generate procedural audio buffers, then proceed to PreloadScene.
+    // Guard against React Strict Mode destroying this scene mid-init.
+    const audio = new AudioManager();
+    audio.init().then(() => {
+      if (!this.scene?.isActive("BootScene")) return;
+      this.registry.set("audioManager", audio);
+      this.scene.start("PreloadScene");
+    }).catch(() => {
+      // Audio failed — continue without it
+      try { this.scene?.start("PreloadScene"); } catch { /* scene destroyed */ }
+    });
   }
 
   /** Register all hero animations after textures exist */
@@ -582,32 +594,61 @@ export class BootScene extends Phaser.Scene {
     fireGfx.generateTexture("fire-button", 60, 60);
     fireGfx.destroy();
 
-    // ── Projectile: fireball — orange/red ball ──
+    // ── Projectile: fireball — bright energy ball with glow ──
     const fbGfx = this.add.graphics();
+    // Outer glow
+    fbGfx.fillStyle(0xff4400, 0.3);
+    fbGfx.fillCircle(10, 10, 10);
+    // Core
     fbGfx.fillStyle(0xff6b35, 1);
-    fbGfx.fillCircle(8, 8, 8);
-    fbGfx.fillStyle(0xffdd00, 0.8);
-    fbGfx.fillCircle(6, 6, 4);
-    fbGfx.generateTexture("projectile-fireball", 16, 16);
+    fbGfx.fillCircle(10, 10, 7);
+    // Hot center
+    fbGfx.fillStyle(0xffdd00, 1);
+    fbGfx.fillCircle(9, 8, 4);
+    // White-hot highlight
+    fbGfx.fillStyle(0xffffff, 0.9);
+    fbGfx.fillCircle(8, 7, 2);
+    fbGfx.generateTexture("projectile-fireball", 20, 20);
     fbGfx.destroy();
 
-    // ── Projectile: boomerang — cyan diamond ──
+    // ── Projectile: boomerang — large dramatic spinning blade ──
     const bmGfx = this.add.graphics();
+    // Outer glow ring
+    bmGfx.fillStyle(0x00d4ff, 0.2);
+    bmGfx.fillCircle(16, 16, 16);
+    // Main diamond shape — larger
     bmGfx.fillStyle(0x00d4ff, 1);
-    bmGfx.fillTriangle(8, 0, 16, 8, 8, 16);
-    bmGfx.fillTriangle(8, 0, 0, 8, 8, 16);
-    bmGfx.fillStyle(0xffffff, 0.6);
-    bmGfx.fillCircle(8, 8, 3);
-    bmGfx.generateTexture("projectile-boomerang", 16, 16);
+    bmGfx.fillTriangle(16, 0, 32, 16, 16, 32);
+    bmGfx.fillTriangle(16, 0, 0, 16, 16, 32);
+    // Inner detail
+    bmGfx.fillStyle(0x66eeff, 0.8);
+    bmGfx.fillTriangle(16, 6, 26, 16, 16, 26);
+    bmGfx.fillTriangle(16, 6, 6, 16, 16, 26);
+    // Center gem
+    bmGfx.fillStyle(0xffffff, 0.9);
+    bmGfx.fillCircle(16, 16, 4);
+    bmGfx.generateTexture("projectile-boomerang", 32, 32);
     bmGfx.destroy();
 
-    // ── Projectile: wave — wide teal arc ──
+    // ── Projectile: wave — large blade slash arc ──
     const wvGfx = this.add.graphics();
-    wvGfx.fillStyle(0x2ec4b6, 0.8);
-    wvGfx.fillEllipse(16, 10, 32, 20);
-    wvGfx.fillStyle(0xffffff, 0.4);
-    wvGfx.fillEllipse(14, 8, 20, 10);
-    wvGfx.generateTexture("projectile-wave", 32, 20);
+    // Arc slash shape
+    wvGfx.fillStyle(0x2ec4b6, 0.9);
+    wvGfx.fillEllipse(32, 32, 56, 48);
+    // Inner cut-out to make it arc-shaped
+    wvGfx.fillStyle(0x000000, 0);
+    // Bright edge
+    wvGfx.fillStyle(0x7efce0, 0.8);
+    wvGfx.fillEllipse(32, 28, 44, 12);
+    // Sharp tip highlight
+    wvGfx.lineStyle(3, 0xffffff, 0.9);
+    wvGfx.beginPath();
+    wvGfx.arc(32, 32, 24, -0.8, 0.8, false);
+    wvGfx.strokePath();
+    // Center energy
+    wvGfx.fillStyle(0xffffff, 0.5);
+    wvGfx.fillCircle(32, 28, 6);
+    wvGfx.generateTexture("projectile-wave", 64, 64);
     wvGfx.destroy();
 
     // ── Boss: Charger — red armored bull-like beast ──

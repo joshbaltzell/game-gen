@@ -7,6 +7,7 @@ import { Collectible } from "../entities/Collectible";
 import { PowerUp } from "../entities/PowerUp";
 import { Boss } from "../entities/Boss";
 import { TouchControls } from "../systems/TouchControls";
+import { AudioManager } from "../systems/AudioManager";
 import { LevelGenerator } from "../levels/LevelGenerator";
 import type { LevelData, WeaponType } from "@/types/game";
 
@@ -34,6 +35,7 @@ export class GameScene extends Phaser.Scene {
   private bossNameText?: Phaser.GameObjects.Text;
   private bossDefeated: boolean = false;
   private exitPortalLocked: boolean = false;
+  private audio?: AudioManager;
 
   constructor() {
     super("GameScene");
@@ -147,18 +149,23 @@ export class GameScene extends Phaser.Scene {
       this
     );
 
-    // Camera — zoom out for SNES-like proportions with tighter follow
-    const baseWidth = this.scale.width;
-    const zoom = baseWidth < 480 ? 0.75 : 0.6;
+    // Camera — zoom so the full world height (including ground tile) fits
+    // the viewport. groundBottom = bottom edge of the ground row.
+    const groundBottom = (this.levelData.height) * this.levelData.tileSize;
+    const viewH = this.scale.height;
+    const zoom = viewH / groundBottom;
     this.cameras.main.setZoom(zoom);
-    this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+    this.cameras.main.setBounds(0, 0, worldWidth, groundBottom);
     this.cameras.main.startFollow(this.player.sprite, true, 0.15, 0.15);
-    // Look-ahead: offset camera in movement direction
-    this.cameras.main.setFollowOffset(-60, -20);
+    this.cameras.main.setFollowOffset(-60, 0);
     this.physics.world.setBounds(0, 0, worldWidth, worldHeight);
 
     // Controls
     this.controls = new TouchControls(this);
+
+    // Audio
+    this.audio = this.registry.get("audioManager") as AudioManager | undefined;
+    this.audio?.startMusic();
 
     // Weapon HUD label
     this.weaponLabel = this.add
@@ -197,8 +204,8 @@ export class GameScene extends Phaser.Scene {
           undefined,
           this,
         );
-        // Projectiles collide with platforms (except boomerang returning)
-        if (proj.weaponType !== "boomerang") {
+        // Projectiles collide with platforms (except boomerang and wave/blade swing)
+        if (proj.weaponType === "fireball") {
           this.physics.add.collider(proj.sprite, this.platforms, () => {
             proj.sprite.destroy();
           });
@@ -310,6 +317,7 @@ export class GameScene extends Phaser.Scene {
     const sprite = item as Phaser.Physics.Arcade.Sprite;
     // Burst particles on collect
     this.spawnParticles(sprite.x, sprite.y, 0xffd166, 6);
+    this.audio?.play("sfx-coin");
     sprite.destroy();
     this.collectiblesFound++;
     this.score += 100;
@@ -326,6 +334,7 @@ export class GameScene extends Phaser.Scene {
   ): void => {
     const sprite = item as Phaser.Physics.Arcade.Sprite;
     sprite.destroy();
+    this.audio?.play("sfx-power-up");
     this.player.activateStar(this);
     this.score += 500;
     EventBus.emit("power-up-collected", { type: "star", score: this.score });
@@ -337,6 +346,7 @@ export class GameScene extends Phaser.Scene {
   ): void => {
     const sprite = item as Phaser.Physics.Arcade.Sprite;
     this.spawnParticles(sprite.x, sprite.y, 0x00d4ff, 8);
+    this.audio?.play("sfx-power-up");
     sprite.destroy();
     this.player.cycleWeapon();
     this.score += 150;
@@ -354,6 +364,7 @@ export class GameScene extends Phaser.Scene {
     const proj = this.player.projectiles.find((p) => p.sprite === projSprite);
 
     this.spawnParticles(enemySprite.x, enemySprite.y, 0xff6b6b, 8);
+    this.audio?.play("sfx-enemy-hit");
     this.screenShake(3, 80);
     enemySprite.destroy();
     this.score += 200;
@@ -369,6 +380,8 @@ export class GameScene extends Phaser.Scene {
     if (this.isLevelComplete) return;
     if (this.exitPortalLocked) return; // Boss must be defeated first
     this.isLevelComplete = true;
+    this.audio?.play("sfx-level-complete");
+    this.audio?.stopMusic();
     this.player.playCelebrate();
 
     EventBus.emit("level-complete", {
@@ -420,6 +433,7 @@ export class GameScene extends Phaser.Scene {
     ) {
       // Stomp kill
       this.spawnParticles(enemySprite.x, enemySprite.y, 0xff6b6b, 8);
+      this.audio?.play("sfx-enemy-hit");
       this.screenShake(4, 100);
       enemySprite.destroy();
       this.score += 200;
@@ -437,6 +451,7 @@ export class GameScene extends Phaser.Scene {
 
     this.lives--;
     this.player.takeDamage();
+    this.audio?.play("sfx-player-damage");
     this.screenShake(6, 150);
     EventBus.emit("player-hit", { lives: this.lives });
 
@@ -702,6 +717,7 @@ export class GameScene extends Phaser.Scene {
   private onBossDefeated(): void {
     this.bossDefeated = true;
     this.exitPortalLocked = false;
+    this.audio?.play("sfx-boss-defeat");
     this.player.playCelebrate();
 
     // Show exit portal
